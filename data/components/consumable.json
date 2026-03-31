@@ -1,0 +1,108 @@
+{
+    "id": "consumable",
+    "description": "可消耗使用",
+    "components": {
+        "type": "dict",
+        "values": {
+            "animation": {
+                "type": "simple_enum",
+                "values": {
+                    "吃": "eat",
+                    "无动作": "none",
+                    "饮用": "drink",
+                    "格挡": "block",
+                    "拉弓": "bow",
+                    "清刷": "brush",
+                    "弩上弦": "crossbow",
+                    "矛蓄力": "spear",
+                    "三叉戟投掷": "trident",
+                    "看望远镜": "spyglass",
+                    "吹山羊角": "toot_horn",
+                    "使用收纳袋": "bundle"
+                },
+                "description": "使用动画"
+            },
+            "consume_seconds": {
+                "type": "float",
+                "description": "使用时间（秒）",
+                "place_holder_text": "浮点数，默认1.6秒"
+            },
+            "has_consume_particles": {
+                "type": "bool",
+                "default": false,
+                "description": "使用时产生物品破碎粒子"
+            },
+            "on_consume_effects": {
+                "type": "list",
+                "description": "使用时效果列表",
+                "values": {
+                    "type": "enum",
+                    "description": "效果类型",
+                    "values": {
+                        "给予状态效果": {
+                            "id": "apply_effects",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "effects": {
+                                        "type": "effect",
+                                        "description": "要施加的状态效果"
+                                    },
+                                    "probability": {
+                                        "type": "float",
+                                        "description": "效果生效概率（浮点数，0.0~1.0）",
+                                        "place_holder_text": "默认1.0（100%）"
+                                    }
+                                }
+                            }
+                        },
+                        "移除所有状态效果": {
+                            "id": "clear_all_effects"
+                        },
+                        "播放声音": {
+                            "id": "play_sound",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "sound": {
+                                        "type": "sound_event",
+                                        "description": "要播放的声音"
+                                    }
+                                }
+                            }
+                        },
+                        "移除指定状态效果": {
+                            "id": "remove_effects",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "effects": {
+                                        "type": "effect_filter",
+                                        "description": "要移除的状态效果"
+                                    }
+                                }
+                            }
+                        },
+                        "随机传送": {
+                            "id": "teleport_randomly",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "diameter": {
+                                        "type": "float",
+                                        "description": "随机传送半径（格）",
+                                        "place_holder_text": "默认16格"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "sound": {
+                "type": "sound_event",
+                "description": "使用物品时产生的声音"
+            }
+        }
+    }
+}

@@ -1,0 +1,6 @@
+{
+    "name": "时运",
+    "id": "minecraft:fortune",
+    "max_level": 3,
+    "description": "增加方块掉落物的数量或概率"
+}

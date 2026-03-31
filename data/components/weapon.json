@@ -1,0 +1,19 @@
+{
+    "id": "weapon",
+    "description": "武器",
+    "components": {
+        "type": "dict",
+        "values": {
+            "disable_blocking_for_seconds": {
+                "type": "float",
+                "description": "攻击成功禁用目标盾牌的秒数",
+                "place_holder_text": "浮点数，默认0.0"
+            },
+            "item_damage_per_attack": {
+                "type": "int",
+                "description": "每次攻击造成的物品耐久损耗",
+                "place_holder_text": "整数，默认1点"
+            }
+        }
+    }
+}

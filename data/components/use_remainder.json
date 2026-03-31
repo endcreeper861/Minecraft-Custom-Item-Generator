@@ -1,0 +1,8 @@
+{
+    "id": "use_remainder",
+    "description": "消耗使用后返还物品",
+    "components": {
+        "type": "item",
+        "description": "使用后返还的物品"
+    }
+}

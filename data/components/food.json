@@ -1,0 +1,24 @@
+{
+    "id": "food",
+    "description": "食物",
+    "components": {
+        "type": "dict",
+        "values": {
+            "can_always_eat": {
+                "type": "bool",
+                "default": false,
+                "description": "饥饿值满时可食用"
+            },
+            "nutrition": {
+                "type": "int",
+                "place_holder_text": "整数，默认0",
+                "description": "饥饿值"
+            },
+            "saturation": {
+                "type": "float",
+                "place_holder_text": "浮点数，默认0.0",
+                "description": "饱和度"
+            }
+        }
+    }
+}
