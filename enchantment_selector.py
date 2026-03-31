@@ -52,8 +52,10 @@ class CustomTableWidget(QTableWidget):
 
         # 绑定鼠标移动事件以显示 Tooltip
         self.cellEntered.connect(self.on_cell_entered)
+        logger.debug("自定义表格已初始化（is_source=%s）", self.is_source)
 
     def on_cell_entered(self, row, col):
+        logger.debug("鼠标移入单元格：行=%s 列=%s is_source=%s", row, col, self.is_source)
         if row == -1:
             return
         if self.is_source:
@@ -66,6 +68,7 @@ class CustomTableWidget(QTableWidget):
         item = self.itemAt(event.pos())
         if item:
             row = item.row()
+            logger.debug("表格被点击：行=%s is_source=%s", row, self.is_source)
             # 使用 self.window() 获取主窗口
             main_window = self.window()
             if isinstance(main_window, EnchantmentWindow):
@@ -84,6 +87,7 @@ class EnchantmentWindow(QMainWindow):
 
         # 存储当前所有可用的附魔数据（用于搜索和恢复）
         self.all_enchantments = enchantment.get_all_enchantments()
+        logger.info("已加载 %d 个附魔", len(self.all_enchantments))
         # 存储已选附魔的 ID 集合，防止重复添加
         self.selected_ids = set()
         # 保存后返回的 EnchantmentGroup（若未保存则为 None）
@@ -92,6 +96,7 @@ class EnchantmentWindow(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
+        logger.debug("初始化附魔窗口 UI")
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
@@ -118,7 +123,7 @@ class EnchantmentWindow(QMainWindow):
         # 右侧“确定”按钮（替代旧的“保存”按钮）
         self.ok_btn = QPushButton("确定")
         self.ok_btn.setFixedHeight(35)
-        self.ok_btn.setStyleSheet(utils.SAVE_BUTTON_STYLE_SHEET)
+        self.ok_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
         self.ok_btn.clicked.connect(self.confirm_group)
         top_layout.addWidget(self.ok_btn)
 
@@ -172,6 +177,7 @@ class EnchantmentWindow(QMainWindow):
         main_layout.addWidget(splitter)
 
     def populate_all_table(self, filter_text=""):
+        logger.debug("填充全部附魔表，筛选=%r", filter_text)
         self.all_table.setRowCount(0)  # 清空
         for i, data in enumerate(self.all_enchantments):
             # 简单的搜索过滤
@@ -192,33 +198,38 @@ class EnchantmentWindow(QMainWindow):
             self.all_table.setItem(row_pos, 0, item_name)
             self.all_table.setItem(row_pos, 1, item_id)
             self.all_table.setItem(row_pos, 2, item_desc)
+        logger.debug("填充全部附魔表完成，行数=%d", self.all_table.rowCount())
 
     def filter_table(self, text):
+        logger.debug("筛选表格文本=%r", text)
         self.populate_all_table(text)
 
     def move_to_selected(self, row):
+        logger.debug("将附魔移到已选：行=%s", row)
         # 获取右侧表格该行的数据
         item_id_item = self.all_table.item(row, 1)
         if not item_id_item:
+            logger.warning("未在第 %s 行找到项目", row)
             return
         item_id = item_id_item.text()
 
         if item_id in self.selected_ids:
+            logger.warning("尝试添加重复附魔 id=%s", item_id)
             return  # 防止重复添加
 
         name_item = self.all_table.item(row, 0)
         desc_item = self.all_table.item(row, 2)
         if not name_item or not desc_item:
+            logger.warning("第 %s 行缺少名称或描述", row)
             return
 
         name = name_item.text()
         desc = desc_item.text()
 
         # 找到原始数据以获取等级限制
-        original_data = next(
-            (x for x in self.all_enchantments if x.id == item_id), None
-        )
+        original_data = next((x for x in self.all_enchantments if x.id == item_id), None)
         if not original_data:
+            logger.warning("未找到 id=%s 的原始数据", item_id)
             return
 
         # 添加到左侧表格
@@ -233,41 +244,44 @@ class EnchantmentWindow(QMainWindow):
         level_input = QLineEdit()
         level_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         level_input.setPlaceholderText(f"最高等级：{original_data.max_level}")
-        # 移除SpinBox的边框使其看起来更像表格的一部分（可选）
-        level_input.setStyleSheet(
-            "QSpinBox { border: 1px solid #ccc; border-radius: 2px; }"
-        )
+        level_input.setStyleSheet("QSpinBox { border: 1px solid #ccc; border-radius: 2px; }")
 
         self.selected_table.setCellWidget(row_pos, 3, level_input)
 
         # 标记为已选
         self.selected_ids.add(item_id)
+        logger.info("已添加附魔：%s（%s），最大等级=%s", name, item_id, original_data.max_level)
 
-        # 从右侧表格移除该行 (注意：因为可能有搜索过滤，直接 removeRow 可能会错乱，
-        # 但在这个简单示例中，我们假设搜索只是隐藏，或者重新加载。
-        # 为了严谨，我们根据 ID 在数据源中标记，然后重新刷新右侧表格)
+        # 刷新表格显示
+        logger.debug("选择后刷新表格，id=%s", item_id)
         self.refresh_tables()
 
     def move_to_unselected(self, row):
+        logger.debug("将附魔从已选移出：行=%s", row)
         # 获取左侧表格该行的 ID
         item_id_item = self.selected_table.item(row, 1)
         if not item_id_item:
+            logger.warning("未在第 %s 行找到项目（取消选择）", row)
             return
         item_id = item_id_item.text()
 
         # 从已选集合移除
         if item_id in self.selected_ids:
             self.selected_ids.remove(item_id)
+            logger.info("已从已选集合移除附魔 id=%s", item_id)
 
         # 从左侧表格移除行
         self.selected_table.removeRow(row)
 
         # 刷新右侧表格以显示刚才移除的项目
+        logger.debug("取消选择后刷新表格，id=%s", item_id)
         self.refresh_tables()
 
     def refresh_tables(self):
+        logger.debug("刷新表格调用")
         # 刷新右侧表格（恢复被移除的项）
         current_filter = self.search_input.text()
+        logger.debug("刷新表格，使用筛选=%r", current_filter)
         self.populate_all_table(current_filter)
 
         # 注意：左侧表格不需要完全重绘，因为上面的 removeRow 已经处理了移除。
@@ -281,6 +295,7 @@ class EnchantmentWindow(QMainWindow):
         pass
 
     def collect_group(self) -> enchantment.EnchantmentGroup:
+        logger.debug("收集附魔组，已选行数=%d", self.selected_table.rowCount())
         enchantments = []
         for row in range(self.selected_table.rowCount()):
             item_id_item = self.selected_table.item(row, 1)
@@ -315,7 +330,7 @@ class EnchantmentWindow(QMainWindow):
                 level=level,
             )
             enchantments.append(ench)
-
+        logger.debug("收集完成，共 %d 个附魔", len(enchantments))
         return enchantment.EnchantmentGroup(enchantments=enchantments)
 
     def save_preset(self):
@@ -335,11 +350,11 @@ class EnchantmentWindow(QMainWindow):
         out_dir = Path(CUSTOM_ENCHANTMENTS_DIR)
         out_dir.mkdir(parents=True, exist_ok=True)
         file_path = out_dir / f"{safe_name}.json"
-
+        logger.info("保存预设 '%s' 到 %s", safe_name, file_path)
         group = self.collect_group()
         with file_path.open("w", encoding="utf-8") as f:
             json.dump(group.to_json(), f, ensure_ascii=False, indent=4)
-
+        logger.debug("预设已写入 %s", file_path)
         self.saved_group = group
         QToolTip.showText(
             self.save_preset_btn.mapToGlobal(self.save_preset_btn.rect().center()),
@@ -354,6 +369,7 @@ class EnchantmentWindow(QMainWindow):
         )
         if not file_path:
             return
+        logger.info("从 %s 加载预设", file_path)
         try:
             with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -366,6 +382,8 @@ class EnchantmentWindow(QMainWindow):
             # 清空当前已选
             self.selected_table.setRowCount(0)
             self.selected_ids.clear()
+
+            logger.debug("已加载预设条目数量=%d", len(entries) if hasattr(entries, '__len__') else 0)
 
             for entry in entries:
                 item_id = entry.get("id", "")
@@ -395,7 +413,7 @@ class EnchantmentWindow(QMainWindow):
 
             self.refresh_tables()
         except Exception as e:
-            logger.exception("加载预设失败: %s", e)
+            logger.exception("加载预设失败：%s", e)
             QToolTip.showText(
                 self.load_preset_btn.mapToGlobal(self.load_preset_btn.rect().center()),
                 "加载失败",
@@ -403,6 +421,7 @@ class EnchantmentWindow(QMainWindow):
 
     def confirm_group(self):
         group = self.collect_group()
+        logger.info("确认附魔组，共 %d 个附魔", len(group.enchantments) if hasattr(group, 'enchantments') else 0)
         self.saved_group = group
         self.close()
 
@@ -414,6 +433,7 @@ def open_enchantment_selector():
     Returns:
         保存后返回 EnchantmentGroup 实例；若未保存直接关闭则返回 None。
     """
+    logger.debug("调用打开附魔选择器")
     app_created = False
     app = QApplication.instance()
     if app is None:
@@ -425,21 +445,25 @@ def open_enchantment_selector():
 
     if app_created:
         # 如果我们创建了 QApplication，就运行主循环直到退出
+        logger.debug("运行 app.exec()（已创建 QApplication）")
         app.exec()
-        return getattr(window, "saved_group", None)
+        saved = getattr(window, "saved_group", None)
+        logger.info("附魔选择器已关闭（app_created=True），saved_group=%s", "已保存" if saved else "无")
+        return saved
     else:
         # 如果已有运行的 QApplication，使用局部事件循环等待窗口销毁
         loop = QEventLoop()
         window.destroyed.connect(loop.quit)
         loop.exec()
-        return getattr(window, "saved_group", None)
+        saved = getattr(window, "saved_group", None)
+        logger.info("附魔选择器已关闭（app_created=False），saved_group=%s", "已保存" if saved else "无")
+        return saved
 
 
 if __name__ == "__main__":
+    logger.info("作为主应用启动附魔窗口")
     app = QApplication(sys.argv)
-
     app.setFont(QFont(utils.DEFAULT_FONT, 9))
-
     window = EnchantmentWindow()
     window.show()
     sys.exit(app.exec())

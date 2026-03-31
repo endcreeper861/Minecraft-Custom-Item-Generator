@@ -24,7 +24,7 @@ else:  # Linux 或其他
 DEFAULT_FONT = chinese_font
 
 
-DEFAULT_GROUP_STYLE_SHEET = """
+DEFAULT_GROUP_STYLE = """
 QGroupBox {
     font-weight: bold;
     border: 1px solid #ccc;
@@ -40,7 +40,7 @@ QGroupBox::title {
 """
 
 
-SAVE_BUTTON_STYLE_SHEET = """
+BIG_GREEN_BUTTON_STYLE = """
 QPushButton {
     padding: 6px 16px;
     border-radius: 4px;

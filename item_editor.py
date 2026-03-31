@@ -70,7 +70,7 @@ class ItemEditorDialog(QDialog):
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.on_save)
         self.save_btn.setMinimumWidth(80)
-        self.save_btn.setStyleSheet(utils.SAVE_BUTTON_STYLE_SHEET)
+        self.save_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
         save_layout.addWidget(self.save_btn)
 
         main_layout.addLayout(save_layout)
@@ -90,7 +90,7 @@ class ItemEditorDialog(QDialog):
 
         # === 基本设置 ===
         basic_group = QGroupBox("基本设置")
-        basic_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE_SHEET)
+        basic_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
         basic_layout = QVBoxLayout(basic_group)
         basic_layout.setContentsMargins(10, 0, 10, 10)
         basic_layout.setSpacing(10)
@@ -144,7 +144,7 @@ class ItemEditorDialog(QDialog):
 
         # === 物品堆叠组件功能（把若干控制开关放入横向换行的分组） ===
         self.components_group = QGroupBox("物品堆叠组件功能")
-        self.components_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE_SHEET)
+        self.components_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
         comps_layout = QVBoxLayout(self.components_group)
         comps_layout.setContentsMargins(10, 0, 10, 10)
         comps_layout.setSpacing(6)
@@ -170,7 +170,7 @@ class ItemEditorDialog(QDialog):
                     if comp_data.get("components", {}) != {}:
                         comp_group = QGroupBox(comp_desc)
                         comp_group.setVisible(False)
-                        comp_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE_SHEET)
+                        comp_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
                         comp_check_box.stateChanged.connect(
                             self._gen_toggle_settings_visibility(
                                 comp_check_box, comp_group
