@@ -52,6 +52,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+ENCHANTMENT_DATA_DIR = "data/enchantments/"
+
+
 @dataclass
 class Enchantment:
     name: str
@@ -81,9 +84,9 @@ class EnchantmentGroup:
 
 
 def get_all_enchantments() -> list[Enchantment]:
-    """从 data/enchantments 目录加载所有附魔数据，并返回 Enchantment 对象列表。"""
+    """从 ENCHANTMENT_DATA_DIR 目录加载所有附魔数据，并返回 Enchantment 对象列表。"""
     enchantments = []
-    for f in Path("data/enchantments").glob("*.json"):
+    for f in Path(ENCHANTMENT_DATA_DIR).glob("*.json"):
         try:
             with f.open(encoding="utf-8") as file:
                 data = load(file)

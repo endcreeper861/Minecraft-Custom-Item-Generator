@@ -15,7 +15,9 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QInputDialog,
     QSpinBox,
+    QFileDialog,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -28,6 +30,9 @@ import enchantment
 import utils
 
 logger = logging.getLogger(__name__)
+
+
+CUSTOM_ENCHANTMENTS_DIR = "custom/enchantments/"
 
 
 class CustomTableWidget(QTableWidget):
@@ -96,20 +101,26 @@ class EnchantmentWindow(QMainWindow):
         # --- 顶部区域 ---
         top_layout = QHBoxLayout()
 
-        # 输入框
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("自定义附魔组名")
-        self.name_input.setFixedHeight(35)
-        top_layout.addWidget(self.name_input, stretch=3)
+        # 左侧：加载/保存预设按钮
+        self.load_preset_btn = QPushButton("加载预设")
+        self.load_preset_btn.setFixedHeight(35)
+        self.load_preset_btn.clicked.connect(self.load_preset)
+        top_layout.addWidget(self.load_preset_btn)
 
-        # 绿色保存按钮
-        self.save_btn = QPushButton("保存")
-        self.save_btn.setFixedHeight(35)
-        self.save_btn.setStyleSheet(utils.SAVE_BUTTON_STYLE_SHEET)
-        # 绑定保存按钮到保存函数
-        self.save_btn.clicked.connect(self.save_group)
+        self.save_preset_btn = QPushButton("保存预设")
+        self.save_preset_btn.setFixedHeight(35)
+        self.save_preset_btn.clicked.connect(self.save_preset)
+        top_layout.addWidget(self.save_preset_btn)
 
-        top_layout.addWidget(self.save_btn)
+        # 在左侧按钮和右侧“确定”之间添加伸缩，使“确定”靠右
+        top_layout.addStretch(1)
+
+        # 右侧“确定”按钮（替代旧的“保存”按钮）
+        self.ok_btn = QPushButton("确定")
+        self.ok_btn.setFixedHeight(35)
+        self.ok_btn.setStyleSheet(utils.SAVE_BUTTON_STYLE_SHEET)
+        self.ok_btn.clicked.connect(self.confirm_group)
+        top_layout.addWidget(self.ok_btn)
 
         main_layout.addLayout(top_layout)
 
@@ -264,24 +275,12 @@ class EnchantmentWindow(QMainWindow):
         # 这里主要为了处理右侧表格的显示状态。
 
     def save_group(self):
-        # 收集组名
-        group_name = self.name_input.text().strip()
-        if not group_name:
-            group_name = datetime.now().strftime("group_%Y%m%d_%H%M%S")
+        # 旧的保存行为已拆分：
+        # - 使用 save_preset() 弹出保存名并写入文件（并关闭窗口）
+        # - 使用 confirm_group() 仅返回当前编辑的 EnchantmentGroup（不写文件）
+        pass
 
-        # 生成安全的文件名
-        safe_name = (
-            "".join(
-                c if c.isalnum() or c in (" ", "_", "-") else "_" for c in group_name
-            )
-            .strip()
-            .replace(" ", "_")
-        )
-
-        out_dir = Path("data/enchantments")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        file_path = out_dir / f"{safe_name}.json"
-
+    def collect_group(self) -> enchantment.EnchantmentGroup:
         enchantments = []
         for row in range(self.selected_table.rowCount()):
             item_id_item = self.selected_table.item(row, 1)
@@ -295,7 +294,6 @@ class EnchantmentWindow(QMainWindow):
             max_level = original.max_level if original else None
             desc = original.description if original else ""
 
-            # 从输入框读取等级，若无则使用默认
             level = 1
             widget = self.selected_table.cellWidget(row, 3)
             if widget:
@@ -318,21 +316,100 @@ class EnchantmentWindow(QMainWindow):
             )
             enchantments.append(ench)
 
-        group = enchantment.EnchantmentGroup(enchantments=enchantments)
+        return enchantment.EnchantmentGroup(enchantments=enchantments)
+
+    def save_preset(self):
+        name, ok = QInputDialog.getText(self, "保存预设", "输入保存名:")
+        if not ok:
+            return
+        name = name.strip()
+        if not name:
+            return
+
+        safe_name = (
+            "".join(c if c.isalnum() or c in (" ", "_", "-") else "_" for c in name)
+            .strip()
+            .replace(" ", "_")
+        )
+
+        out_dir = Path(CUSTOM_ENCHANTMENTS_DIR)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        file_path = out_dir / f"{safe_name}.json"
+
+        group = self.collect_group()
         with file_path.open("w", encoding="utf-8") as f:
             json.dump(group.to_json(), f, ensure_ascii=False, indent=4)
 
-        # 记录已保存的组并关闭窗口（调用者会读取 saved_group）
         self.saved_group = group
         QToolTip.showText(
-            self.save_btn.mapToGlobal(self.save_btn.rect().center()),
+            self.save_preset_btn.mapToGlobal(self.save_preset_btn.rect().center()),
             f"已保存到 {file_path}",
         )
         self.close()
 
+    def load_preset(self):
+        start_dir = str(Path(CUSTOM_ENCHANTMENTS_DIR).resolve())
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择附魔组 JSON", start_dir, "JSON Files (*.json)"
+        )
+        if not file_path:
+            return
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                data = json.load(f)
+
+            if isinstance(data, dict) and "enchantments" in data:
+                entries = data["enchantments"]
+            else:
+                entries = data
+
+            # 清空当前已选
+            self.selected_table.setRowCount(0)
+            self.selected_ids.clear()
+
+            for entry in entries:
+                item_id = entry.get("id", "")
+                name = entry.get("name", "")
+                desc = entry.get("description", "")
+                level = entry.get("level", 1)
+
+                original = next(
+                    (x for x in self.all_enchantments if x.id == item_id), None
+                )
+                max_level = original.max_level if original else None
+
+                row_pos = self.selected_table.rowCount()
+                self.selected_table.insertRow(row_pos)
+                self.selected_table.setItem(row_pos, 0, QTableWidgetItem(name))
+                self.selected_table.setItem(row_pos, 1, QTableWidgetItem(item_id))
+                self.selected_table.setItem(row_pos, 2, QTableWidgetItem(desc))
+
+                level_input = QLineEdit()
+                level_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                level_input.setText(str(level) if level is not None else "")
+                if max_level is not None:
+                    level_input.setPlaceholderText(f"最高等级：{max_level}")
+                self.selected_table.setCellWidget(row_pos, 3, level_input)
+
+                self.selected_ids.add(item_id)
+
+            self.refresh_tables()
+        except Exception as e:
+            logger.exception("加载预设失败: %s", e)
+            QToolTip.showText(
+                self.load_preset_btn.mapToGlobal(self.load_preset_btn.rect().center()),
+                "加载失败",
+            )
+
+    def confirm_group(self):
+        group = self.collect_group()
+        self.saved_group = group
+        self.close()
+
 
 def open_enchantment_selector():
-    """打开附魔选择器窗口并阻塞直到窗口关闭。
+    """
+    打开附魔选择器窗口并阻塞直到窗口关闭。
 
     Returns:
         保存后返回 EnchantmentGroup 实例；若未保存直接关闭则返回 None。
