@@ -10,8 +10,6 @@ from PyQt6.QtWidgets import (
     QToolTip,
 )
 
-import enchantment_selector
-
 
 system_name = platform.system()
 if system_name == "Windows":

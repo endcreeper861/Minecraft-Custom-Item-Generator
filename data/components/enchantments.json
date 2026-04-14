@@ -1,0 +1,8 @@
+{
+    "id": "enchantments",
+    "description": "附魔",
+    "components": {
+        "type": "enchantment",
+        "description": "选择附魔"
+    }
+}

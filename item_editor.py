@@ -182,7 +182,7 @@ class ItemEditorDialog(QDialog):
                         comp_layout.setSpacing(10)
 
                         layout = component.load_component(
-                            comp_data["components"], self.current_item
+                            comp_data["components"], self.current_item, comp_id
                         )
                         comp_layout.addLayout(layout)
 

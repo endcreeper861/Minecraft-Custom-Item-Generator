@@ -31,7 +31,7 @@
 
 ## 文件结构
 
-依赖关系图：
+（未来将实现的）依赖关系图：
 
 ```mermaid
 classDiagram
@@ -64,21 +64,41 @@ classDiagram
             +to_json() -> list[dict]
         }
     }
-    namespace enchantment_editor.py {
+    namespace enchantment_selector.py {
         class CustomTableWidget {
         }
         class EnchantmentWindow {
         }
     }
+    namespace component.py {
+        class Component {
+        }
+    }
+    namespace effect.py {
+        class Effect {
+        }
+    }
+    namespace effect_selector.py {
+        class EffectWindow {
+        }
+    }
+    namespace json_text_editor.py {
+        class JSONTextEditorWindow {
+        }
+    }
 
     ItemEditorDialog ..> Item : 访问属性
     ItemEditorDialog ..> ItemSelectorDialog : 调用
-    ItemEditorDialog ..> EnchantmentWindow : 调用
+    ItemEditorDialog ..> Component : 访问属性
+    Component ..> EnchantmentWindow : 调用
+    Component ..> EffectWindow : 调用
+    Component ..> JSONTextEditorWindow : 调用
     EnchantmentWindow ..> Enchantment : 访问属性
     EnchantmentWindow ..> EnchantmentGroup : 访问属性
     EnchantmentWindow ..> CustomTableWidget : 调用
     ItemSelectorDialog ..> ItemEditorDialog : 调用
     ItemSelectorDialog ..> ItemWidget : 调用
+    EffectWindow ..> Effect: 访问属性
 ```
 
 ## Component组件类详解
