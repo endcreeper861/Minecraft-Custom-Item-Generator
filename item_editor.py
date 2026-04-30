@@ -9,12 +9,12 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPixmap
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
                              QGridLayout, QGroupBox, QHBoxLayout, QLabel,
                              QLayout, QLayoutItem, QLineEdit, QMessageBox,
-                             QPushButton, QScrollArea, QSizePolicy, QSpinBox,
-                             QVBoxLayout, QWidget)
+                             QPlainTextEdit, QPushButton, QScrollArea,
+                             QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 
 import component
 import item
@@ -72,6 +72,12 @@ class ItemEditorDialog(QDialog):
         self.save_btn.setMinimumWidth(80)
         self.save_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
         save_layout.addWidget(self.save_btn)
+        
+        self.generate_btn = QPushButton("生成命令")
+        self.generate_btn.clicked.connect(self.on_generate)
+        self.generate_btn.setMinimumWidth(80)
+        self.generate_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
+        save_layout.addWidget(self.generate_btn)
 
         main_layout.addLayout(save_layout)
 
@@ -398,6 +404,49 @@ class ItemEditorDialog(QDialog):
         except Exception as e:
             logger.error(f"保存失败: {e}")
             QMessageBox.critical(self, "保存失败", f"保存文件时发生错误:\n{e}")
+
+    def on_generate(self):
+        """生成并展示Minecraft标准give命令"""
+        if self.current_item is None or not self.current_item.id:
+            QMessageBox.warning(self, "提示", "请先选择基础物品！")
+            return
+
+        item_stack = self.current_item.item_stack()
+        command = f"/give @s {item_stack} {self.current_item.count}"
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("命令窗口")
+        dialog.resize(560, 240)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        text_box = QPlainTextEdit()
+        text_box.setReadOnly(True)
+        text_box.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        text_box.setPlainText(command)
+        layout.addWidget(text_box)
+
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+
+        close_btn = QPushButton("关闭")
+        close_btn.clicked.connect(dialog.accept)
+        button_layout.addWidget(close_btn)
+
+        copy_btn = QPushButton("复制命令")
+        copy_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
+
+        def copy_command():
+            QGuiApplication.clipboard().setText(command) # type: ignore
+
+        copy_btn.clicked.connect(copy_command)
+        button_layout.addWidget(copy_btn)
+
+        layout.addLayout(button_layout)
+
+        dialog.exec()
 
 
 def open_item_editor(parent=None) -> item.Item | None:
