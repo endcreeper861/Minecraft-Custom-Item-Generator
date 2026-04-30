@@ -386,7 +386,7 @@ class ItemEditorDialog(QDialog):
 
         try:
             # 使用Item的to_json方法生成JSON内容
-            json_content = self.current_item.to_json()
+            json_content = self.current_item.to_dict()
 
             # 写入文件
             with open(save_path, "w", encoding="utf-8") as f:

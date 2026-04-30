@@ -94,7 +94,7 @@ class Item:
         else:
             return f"{self.id}"
 
-    def to_json(self) -> dict:
+    def to_dict(self) -> dict:
         """将 Item 对象转换为 JSON 可序列化的字典"""
         return {
             "name": self.name,
