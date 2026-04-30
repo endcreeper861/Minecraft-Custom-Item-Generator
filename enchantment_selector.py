@@ -284,16 +284,6 @@ class EnchantmentWindow(QMainWindow):
         logger.debug("刷新表格，使用筛选=%r", current_filter)
         self.populate_all_table(current_filter)
 
-        # 注意：左侧表格不需要完全重绘，因为上面的 removeRow 已经处理了移除。
-        # 但如果是从右侧移过来，上面的逻辑已经处理了添加。
-        # 这里主要为了处理右侧表格的显示状态。
-
-    def save_group(self):
-        # 旧的保存行为已拆分：
-        # - 使用 save_preset() 弹出保存名并写入文件（并关闭窗口）
-        # - 使用 confirm_group() 仅返回当前编辑的 EnchantmentGroup（不写文件）
-        pass
-
     def collect_group(self) -> enchantment.EnchantmentGroup:
         logger.debug("收集附魔组，已选行数=%d", self.selected_table.rowCount())
         enchantments = []
