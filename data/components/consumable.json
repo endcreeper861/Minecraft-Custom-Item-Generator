@@ -29,7 +29,7 @@
             },
             "has_consume_particles": {
                 "type": "bool",
-                "default": false,
+                "default": true,
                 "description": "使用时产生物品破碎粒子"
             },
             "on_consume_effects": {

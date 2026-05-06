@@ -178,9 +178,7 @@ class ItemEditorDialog(QDialog):
                         comp_group.setVisible(False)
                         comp_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
                         comp_check_box.stateChanged.connect(
-                            self._gen_toggle_settings_visibility(
-                                comp_check_box, comp_group
-                            )
+                            self._gen_toggle_component(comp_check_box, comp_id, comp_group)
                         )
 
                         comp_layout = QVBoxLayout(comp_group)
@@ -193,6 +191,11 @@ class ItemEditorDialog(QDialog):
                         comp_layout.addLayout(layout)
 
                         self.content_groups.append(comp_group)
+
+                    if comp_data.get("components", {}) == {}:
+                        comp_check_box.stateChanged.connect(
+                            self._gen_toggle_component(comp_check_box, comp_id)
+                        )
 
                     flow.addWidget(comp_check_box)
 
@@ -219,14 +222,20 @@ class ItemEditorDialog(QDialog):
         """更新当前编辑物品的数量"""
         self.current_item.count = value
 
-    def _gen_toggle_settings_visibility(
-        self, check_box: QCheckBox, group_box: QGroupBox
+    def _gen_toggle_component(
+        self, check_box: QCheckBox, comp_id: str, group_box: QGroupBox | None = None
     ):
-        """工厂函数，根据 check_box 的状态显示/隐藏 group_box"""
+        """工厂函数，切换组件启用状态并同步到 Item.components。"""
 
         def toggle():
             is_checked = check_box.isChecked()
-            group_box.setVisible(is_checked)
+            if is_checked:
+                if comp_id not in self.current_item.components:
+                    self.current_item.components[comp_id] = {}
+            else:
+                self.current_item.components.pop(comp_id, None)
+            if group_box is not None:
+                group_box.setVisible(is_checked)
 
         return toggle
 

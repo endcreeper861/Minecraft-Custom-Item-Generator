@@ -3,7 +3,7 @@
 """
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QGroupBox, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QVBoxLayout)
@@ -13,15 +13,68 @@ import utils
 
 logger = logging.getLogger(__name__)
 
+DataGetter = Callable[[], dict | list | None]
+
+
+def _get_component_root(current_item: item.Item, component_id: str) -> dict | None:
+    data = current_item.components.get(component_id)
+    if isinstance(data, dict):
+        return data
+    return None
+
+
+def _make_component_root_getter(
+    current_item: item.Item, component_id: str
+) -> DataGetter:
+    def getter() -> dict | list | None:
+        return _get_component_root(current_item, component_id)
+
+    return getter
+
+
+def _make_dict_child_getter(parent_getter: DataGetter, key: str) -> DataGetter:
+    def getter() -> dict | list | None:
+        parent = parent_getter()
+        if parent is None or not isinstance(parent, dict):
+            return None
+        child = parent.get(key)
+        if not isinstance(child, dict):
+            child = {}
+            parent[key] = child
+        return child
+
+    return getter
+
+
+def _make_list_child_getter(parent_getter: DataGetter, key: str) -> DataGetter:
+    def getter() -> dict | list | None:
+        parent = parent_getter()
+        if parent is None or not isinstance(parent, dict):
+            return None
+        child = parent.get(key)
+        if not isinstance(child, list):
+            child = []
+            parent[key] = child
+        return child
+
+    return getter
+
 
 def load_component(
-    data: dict, item: item.Item, id: str, path: str = ""
+    data: dict,
+    item: item.Item,
+    id: str,
+    data_root_getter: DataGetter | None = None,
+    field_key: str | None = None,
 ) -> QHBoxLayout:
     """
     加载数据组件。
     """
     layout = QHBoxLayout()
     logger.debug("加载组件: %s", data.get("type"))
+
+    if data_root_getter is None:
+        data_root_getter = _make_component_root_getter(item, id)
 
     match data:
         case {"type": "int" | "float", "description": description}:
@@ -31,6 +84,25 @@ def load_component(
             if "place_holder_text" in data:
                 input_field.setPlaceholderText(data["place_holder_text"])
             layout.addWidget(input_field)
+            field_type = data["type"]
+
+            def on_text_changed(text: str):
+                container = data_root_getter()
+                if container is None or not isinstance(container, dict):
+                    return
+                if field_key is None:
+                    return
+                text_value = text.strip()
+                if not text_value:
+                    container.pop(field_key, None)
+                    return
+                try:
+                    parsed = int(text_value) if field_type == "int" else float(text_value)
+                except ValueError:
+                    return
+                container[field_key] = parsed
+
+            input_field.textChanged.connect(on_text_changed)
             layout.addStretch()
 
         case {"type": "bool", "description": description, "default": default}:
@@ -38,6 +110,16 @@ def load_component(
             check_box.setChecked(default)
             logger.debug("创建布尔组件: %s (default=%s)", description, default)
             layout.addWidget(check_box)
+
+            def on_state_changed():
+                container = data_root_getter()
+                if container is None or not isinstance(container, dict):
+                    return
+                if field_key is None:
+                    return
+                container[field_key] = check_box.isChecked()
+
+            check_box.stateChanged.connect(on_state_changed)
 
         case {"type": "list", "description": description, "values": values}:
             group_box = QGroupBox(description)
@@ -53,10 +135,17 @@ def load_component(
 
             def add_item():
                 logger.debug("添加列表项到 '%s'", description)
+                data_list = data_root_getter()
+                if data_list is None or not isinstance(data_list, list):
+                    return
+                entry: dict = {}
+                data_list.append(entry)
                 item_box = QGroupBox()
                 item_layout = QVBoxLayout(item_box)
                 item_layout.setContentsMargins(10, 0, 10, 10)
-                item_layout.addLayout(load_component(values, item, id, path))
+                item_layout.addLayout(
+                    load_component(values, item, id, data_root_getter=lambda: entry)
+                )
                 remove_button_layout = QHBoxLayout()
                 remove_button = QPushButton("删除")
                 remove_button.setFixedWidth(50)
@@ -68,6 +157,8 @@ def load_component(
                 def remove_item():
                     # 从布局中移除该项并安排删除以释放资源
                     logger.debug("移除列表项 from '%s'", description)
+                    if entry in data_list:
+                        data_list.remove(entry)
                     list_layout.removeWidget(item_box)
                     item_box.setParent(None)
                     item_box.deleteLater()
@@ -78,6 +169,9 @@ def load_component(
                 # 使用 takeAt() 并对取出的 widget 调用 deleteLater()
                 count = list_layout.count()
                 logger.debug("清空列表 '%s'，项数=%d", description, count)
+                data_list = data_root_getter()
+                if data_list is not None and isinstance(data_list, list):
+                    data_list.clear()
                 while list_layout.count():
                     item = list_layout.takeAt(0)
                     widget = item.widget()  # type: ignore
@@ -107,14 +201,54 @@ def load_component(
             components_layout.setSpacing(10)
             logger.debug("创建dict组件(分组): %s", description)
             for key, value in values.items():
-                components_layout.addLayout(load_component(value, item, id, path))
+                value_type = value.get("type")
+                if value_type in {"dict", "enum"}:
+                    child_getter = _make_dict_child_getter(data_root_getter, key)
+                    components_layout.addLayout(
+                        load_component(value, item, id, data_root_getter=child_getter)
+                    )
+                elif value_type == "list":
+                    child_getter = _make_list_child_getter(data_root_getter, key)
+                    components_layout.addLayout(
+                        load_component(value, item, id, data_root_getter=child_getter)
+                    )
+                else:
+                    components_layout.addLayout(
+                        load_component(
+                            value,
+                            item,
+                            id,
+                            data_root_getter=data_root_getter,
+                            field_key=key,
+                        )
+                    )
             layout.addWidget(group_box)
 
         case {"type": "dict", "values": values}:
             components_layout = QVBoxLayout()
             logger.debug("创建dict组件（无描述）: keys=%s", list(values.keys()))
             for key, value in values.items():
-                components_layout.addLayout(load_component(value, item, id, path))
+                value_type = value.get("type")
+                if value_type in {"dict", "enum"}:
+                    child_getter = _make_dict_child_getter(data_root_getter, key)
+                    components_layout.addLayout(
+                        load_component(value, item, id, data_root_getter=child_getter)
+                    )
+                elif value_type == "list":
+                    child_getter = _make_list_child_getter(data_root_getter, key)
+                    components_layout.addLayout(
+                        load_component(value, item, id, data_root_getter=child_getter)
+                    )
+                else:
+                    components_layout.addLayout(
+                        load_component(
+                            value,
+                            item,
+                            id,
+                            data_root_getter=data_root_getter,
+                            field_key=key,
+                        )
+                    )
             layout.addLayout(components_layout)
 
         case {"type": "simple_enum", "description": description, "values": values}:
@@ -125,6 +259,16 @@ def load_component(
                 "创建simple_enum组件: %s options=%s", description, list(values.keys())
             )
             layout.addWidget(combo_box)
+
+            def on_simple_enum_changed(text: str):
+                container = data_root_getter()
+                if container is None or not isinstance(container, dict):
+                    return
+                if field_key is None:
+                    return
+                container[field_key] = values.get(text, text)
+
+            combo_box.currentTextChanged.connect(on_simple_enum_changed)
             layout.addStretch()
 
         case {"type": "enum", "description": description, "values": values}:
@@ -141,11 +285,19 @@ def load_component(
 
             def on_selection_changed(text):
                 logger.debug("enum组件 '%s' 选择改变: %s", description, text)
+                selected = values[text]
+                selected_id = selected.get("id", text)
+                target = data_root_getter()
+                if isinstance(target, dict):
+                    target.clear()
+                    target["type"] = selected_id
                 # 先清空之前的组件
                 utils.clear_layout(components_layout)
                 # 加载新组件
-                if "components" in values[text]:
-                    new_layout = load_component(values[text]["components"], item, id, path)
+                if "components" in selected:
+                    new_layout = load_component(
+                        selected["components"], item, id, data_root_getter=data_root_getter
+                    )
                     components_layout.addLayout(new_layout)
 
             on_selection_changed(combo_box.currentText())  # 初始化显示默认选项的组件
