@@ -13,7 +13,7 @@
 附魔组文件是一个数组，是多个附魔及其等级的组合。
 
 附魔示例：
-```
+```json
 {
     "name": "时运",
     "id": "minecraft:fortune",
@@ -23,7 +23,7 @@
 ```
 
 附魔组示例：
-```
+```json
 [
     {
         "name": "时运",
@@ -43,7 +43,6 @@
 ```
 """
 
-
 from dataclasses import dataclass
 from pathlib import Path
 from json import load
@@ -62,8 +61,8 @@ class Enchantment:
     max_level: int | None = None
     description: str = ""
     level: int = 1
-    
-    def to_json(self) -> dict:
+
+    def to_dict(self) -> dict:
         """将 Enchantment 对象转换为 JSON 可序列化的字典"""
         return {
             "name": self.name,
@@ -77,10 +76,10 @@ class Enchantment:
 @dataclass
 class EnchantmentGroup:
     enchantments: list[Enchantment]
-    
-    def to_json(self) -> list[dict]:
+
+    def to_dict(self) -> list[dict]:
         """将 EnchantmentGroup 对象转换为 JSON 可序列化的字典"""
-        return [enchantment.to_json() for enchantment in self.enchantments]
+        return [enchantment.to_dict() for enchantment in self.enchantments]
 
 
 def get_all_enchantments() -> list[Enchantment]:
@@ -90,14 +89,7 @@ def get_all_enchantments() -> list[Enchantment]:
         try:
             with f.open(encoding="utf-8") as file:
                 data = load(file)
-                enchantments.append(
-                    Enchantment(
-                        name=data["name"],
-                        id=data["id"],
-                        max_level=data.get("max_level"),
-                        description=data.get("description", ""),
-                    )
-                )
+                enchantments.append(Enchantment(**data))
         except Exception as e:
             logger.error(f"加载附魔数据失败: {f.name} - {e}")
     return enchantments

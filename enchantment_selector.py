@@ -343,7 +343,7 @@ class EnchantmentWindow(QMainWindow):
         logger.info("保存预设 '%s' 到 %s", safe_name, file_path)
         group = self.collect_group()
         with file_path.open("w", encoding="utf-8") as f:
-            json.dump(group.to_json(), f, ensure_ascii=False, indent=4)
+            json.dump(group.to_dict(), f, ensure_ascii=False, indent=4)
         logger.debug("预设已写入 %s", file_path)
         self.saved_group = group
         QToolTip.showText(

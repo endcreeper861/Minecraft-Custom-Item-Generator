@@ -310,10 +310,80 @@ def load_component(
         case {"type": "item", "description": description}:
             # 打开物品选择器
             layout.addWidget(QLabel(description + "："))
+            selected_label = QLabel("未选择")
+            selected_label.setMinimumWidth(200)
+            layout.addWidget(selected_label)
             button = QPushButton("选择物品")
             logger.debug("创建物品选择按钮: %s", description)
             layout.addWidget(button)
             layout.addStretch()
+
+            def set_selected_display(item_id: str, name: str | None, count: int | None):
+                if count is None:
+                    count_text = ""
+                else:
+                    count_text = f" x{count}"
+                if name:
+                    selected_label.setText(f"{name} ({item_id}){count_text}")
+                else:
+                    selected_label.setText(f"{item_id}{count_text}")
+
+            def set_selected_from_payload(payload: dict | str | None):
+                if not payload:
+                    selected_label.setText("未选择")
+                    return
+                if isinstance(payload, str):
+                    set_selected_display(payload, None, None)
+                    return
+                item_id = payload.get("id")
+                if not item_id:
+                    selected_label.setText("未选择")
+                    return
+                count = payload.get("count")
+                set_selected_display(item_id, None, count)
+
+            def get_existing_payload() -> dict | str | None:
+                if field_key is None:
+                    return data_root_getter() # type: ignore
+                container = data_root_getter()
+                if isinstance(container, dict):
+                    return container.get(field_key)
+                return None
+
+            set_selected_from_payload(get_existing_payload())
+
+            def on_select_item():
+                try:
+                    import item_selector
+                except Exception:
+                    logger.exception("导入 item_selector 失败")
+                    return
+
+                selected = item_selector.choose_item(only_basic=False, parent=button.window())
+                if not selected:
+                    return
+
+                item_id = selected.id
+                count = selected.count if selected.count is not None else 1
+                if count < 0:
+                    count = 0
+                if count > 99:
+                    count = 99
+
+                payload: dict = {"id": item_id, "count": count}
+                if selected.components:
+                    payload["components"] = selected.components
+
+                if field_key is None:
+                    item.components[id] = payload
+                else:
+                    container = data_root_getter()
+                    if isinstance(container, dict):
+                        container[field_key] = payload
+
+                set_selected_display(item_id, selected.name, count)
+
+            button.clicked.connect(on_select_item)
 
         case {"type": "effect", "description": description}:
             layout.addWidget(QLabel(description + "："))
