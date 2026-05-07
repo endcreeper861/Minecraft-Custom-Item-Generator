@@ -1,10 +1,9 @@
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import QEvent, QEventLoop, Qt
+from PyQt6.QtCore import QEventLoop, Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -16,7 +15,6 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QInputDialog,
-    QSpinBox,
     QFileDialog,
     QSplitter,
     QTableWidget,

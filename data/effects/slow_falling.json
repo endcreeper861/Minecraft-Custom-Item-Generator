@@ -1,0 +1,5 @@
+{
+    "name": "缓降",
+    "id": "minecraft:slow_falling",
+    "description": "大幅降低生物下落时的重力加速度和终端速度，使生物不会受到摔落伤害"
+}

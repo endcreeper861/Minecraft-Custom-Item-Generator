@@ -1,0 +1,5 @@
+{
+    "name": "饥饿",
+    "id": "minecraft:hunger",
+    "description": "持续增加消耗度"
+}
