@@ -1,0 +1,6 @@
+{
+    "name": "海之眷顾",
+    "id": "minecraft:luck_of_the_sea",
+    "max_level": 3,
+    "description": "增加钓鱼时获得宝藏的概率"
+}

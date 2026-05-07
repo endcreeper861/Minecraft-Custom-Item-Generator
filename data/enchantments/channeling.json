@@ -1,0 +1,6 @@
+{
+    "name": "引雷",
+    "id": "minecraft:channeling",
+    "max_level": 1,
+    "description": "使三叉戟击中实体时召唤闪电，仅在雷暴且被命中实体暴露于雨下时生效"
+}

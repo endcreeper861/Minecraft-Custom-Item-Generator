@@ -1,0 +1,6 @@
+{
+    "name": "火焰附加",
+    "id": "minecraft:fire_aspect",
+    "max_level": 2,
+    "description": "使被近战攻击目标着火"
+}

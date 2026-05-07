@@ -1,0 +1,6 @@
+{
+    "name": "摔落缓冲",
+    "id": "minecraft:feather_falling",
+    "max_level": 4,
+    "description": "减少受到的摔落伤害"
+}

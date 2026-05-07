@@ -1,0 +1,6 @@
+{
+    "name": "经验修补",
+    "id": "minecraft:mending",
+    "max_level": 1,
+    "description": "损耗获得的经验以修补工具或盔甲的耐久度"
+}

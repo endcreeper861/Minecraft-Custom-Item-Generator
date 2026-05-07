@@ -1,0 +1,6 @@
+{
+    "name": "耐久",
+    "id": "minecraft:unbreaking",
+    "max_level": 3,
+    "description": "减少触发耐久消耗的概率"
+}

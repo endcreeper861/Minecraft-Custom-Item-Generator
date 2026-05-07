@@ -1,0 +1,6 @@
+{
+    "name": "冲击",
+    "id": "minecraft:punch",
+    "max_level": 2,
+    "description": "增加箭的击退距离"
+}

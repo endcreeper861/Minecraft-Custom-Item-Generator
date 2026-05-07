@@ -1,0 +1,6 @@
+{
+    "name": "击退",
+    "id": "minecraft:knockback",
+    "max_level": 2,
+    "description": "增加近战攻击造成的击退距离"
+}

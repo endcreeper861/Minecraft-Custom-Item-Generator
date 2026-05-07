@@ -1,0 +1,6 @@
+{
+    "name": "节肢杀手",
+    "id": "minecraft:bane_of_arthropods",
+    "max_level": 5,
+    "description": "对节肢生物造成额外伤害并附加缓慢效果"
+}

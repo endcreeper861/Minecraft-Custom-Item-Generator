@@ -1,0 +1,6 @@
+{
+    "name": "穿透",
+    "id": "minecraft:piercing",
+    "max_level": 4,
+    "description": "使箭穿过多个实体"
+}

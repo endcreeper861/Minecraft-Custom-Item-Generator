@@ -1,0 +1,6 @@
+{
+    "name": "无限",
+    "id": "minecraft:infinity",
+    "max_level": 1,
+    "description": "射箭时不会消耗箭，不包括药箭和光灵箭"
+}

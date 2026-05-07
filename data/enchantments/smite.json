@@ -1,0 +1,6 @@
+{
+    "name": "亡灵杀手",
+    "id": "minecraft:smite",
+    "max_level": 5,
+    "description": "对亡灵生物造成额外伤害"
+}

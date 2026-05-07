@@ -1,0 +1,6 @@
+{
+    "name": "忠诚",
+    "id": "minecraft:loyalty",
+    "max_level": 3,
+    "description": "使掷出后的三叉戟返回，魔咒等级越高，三叉戟返回所需时间越短"
+}

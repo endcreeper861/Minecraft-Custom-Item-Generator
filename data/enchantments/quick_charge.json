@@ -1,0 +1,6 @@
+{
+    "name": "快速装填",
+    "id": "minecraft:quick_charge",
+    "max_level": 3,
+    "description": "减少弩的填装时间"
+}

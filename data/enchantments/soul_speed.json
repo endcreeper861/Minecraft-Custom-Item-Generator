@@ -1,0 +1,6 @@
+{
+    "name": "灵魂疾行",
+    "id": "minecraft:soul_speed",
+    "max_level": 3,
+    "description": "增加玩家在灵魂沙和灵魂土上的移动速度"
+}

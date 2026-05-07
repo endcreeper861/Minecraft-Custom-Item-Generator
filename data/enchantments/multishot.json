@@ -1,0 +1,6 @@
+{
+    "name": "多重射击",
+    "id": "minecraft:multishot",
+    "max_level": 1,
+    "description": "装填时消耗一个物品以装填三个该物品"
+}

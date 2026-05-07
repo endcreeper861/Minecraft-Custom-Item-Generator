@@ -1,0 +1,6 @@
+{
+    "name": "致密",
+    "id": "minecraft:density",
+    "max_level": 5,
+    "description": "增加重锤下落攻击所造成的伤害"
+}

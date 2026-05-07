@@ -1,0 +1,6 @@
+{
+    "name": "冰霜行者",
+    "id": "minecraft:frost_walker",
+    "max_level": 2,
+    "description": "使在水面行走时产生霜冰，且不会受到岩浆块和营火的伤害"
+}

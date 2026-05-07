@@ -1,0 +1,6 @@
+{
+    "name": "水下速掘",
+    "id": "minecraft:aqua_affinity",
+    "max_level": 1,
+    "description": "增加水下挖掘速度"
+}

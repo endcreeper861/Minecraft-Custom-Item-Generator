@@ -1,0 +1,6 @@
+{
+    "name": "消失诅咒",
+    "id": "minecraft:vanishing_curse",
+    "max_level": 1,
+    "description": "在生物死亡时，受影响物品会消失而不掉落"
+}

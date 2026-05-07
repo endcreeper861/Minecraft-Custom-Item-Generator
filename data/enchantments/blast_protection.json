@@ -1,0 +1,6 @@
+{
+    "name": "爆炸保护",
+    "id": "minecraft:blast_protection",
+    "max_level": 4,
+    "description": "减少受到的爆炸伤害，减少受到的爆炸击退"
+}

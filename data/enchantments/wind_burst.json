@@ -1,0 +1,6 @@
+{
+    "name": "风爆",
+    "id": "minecraft:wind_burst",
+    "max_level": 3,
+    "description": "使重锤下落时击中目标后产生风爆，将攻击者向上弹起"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "激流",
+    "id": "minecraft:riptide",
+    "max_level": 3,
+    "description": "将玩家向掷出三叉戟的方向发射，仅在水中或雨中生效"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "破甲",
+    "id": "minecraft:breach",
+    "max_level": 4,
+    "description": "降低攻击目标的护甲值对攻击伤害的减少效果"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "力量",
+    "id": "minecraft:power",
+    "max_level": 5,
+    "description": "增加箭伤害"
+}

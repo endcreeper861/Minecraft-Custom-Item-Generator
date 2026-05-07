@@ -1,0 +1,6 @@
+{
+    "name": "深海探索者",
+    "id": "minecraft:depth_strider",
+    "max_level": 3,
+    "description": "增加水下行走速度"
+}

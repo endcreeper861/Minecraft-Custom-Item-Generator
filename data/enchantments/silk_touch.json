@@ -1,0 +1,6 @@
+{
+    "name": "精准采集",
+    "id": "minecraft:silk_touch",
+    "max_level": 1,
+    "description": "使部分被开采的方块改为掉落其方块物品，而非其他物品"
+}

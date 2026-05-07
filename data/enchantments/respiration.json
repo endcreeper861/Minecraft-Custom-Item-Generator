@@ -1,0 +1,6 @@
+{
+    "name": "水下呼吸",
+    "id": "minecraft:respiration",
+    "max_level": 3,
+    "description": "延长水下呼吸时间"
+}

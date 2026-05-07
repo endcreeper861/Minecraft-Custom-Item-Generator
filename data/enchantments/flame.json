@@ -1,0 +1,6 @@
+{
+    "name": "火矢",
+    "id": "minecraft:flame",
+    "max_level": 1,
+    "description": "使射出的箭着火"
+}

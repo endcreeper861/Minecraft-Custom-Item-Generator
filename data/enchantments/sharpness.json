@@ -1,0 +1,6 @@
+{
+    "name": "锋利",
+    "id": "minecraft:sharpness",
+    "max_level": 5,
+    "description": "增加近战攻击伤害"
+}

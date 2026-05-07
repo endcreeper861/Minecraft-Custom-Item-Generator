@@ -1,0 +1,6 @@
+{
+    "name": "弹射物保护",
+    "id": "minecraft:projectile_protection",
+    "max_level": 4,
+    "description": "减少受到的弹射物伤害"
+}

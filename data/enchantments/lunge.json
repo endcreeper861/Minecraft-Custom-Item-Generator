@@ -1,0 +1,6 @@
+{
+    "name": "突进",
+    "id": "minecraft:lunge",
+    "max_level": 3,
+    "description": "进行戳刺攻击时在攻击方向上移动一段距离"
+}

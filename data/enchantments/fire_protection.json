@@ -1,0 +1,6 @@
+{
+    "name": "火焰保护",
+    "id": "minecraft:fire_protection",
+    "max_level": 4,
+    "description": "减少受到的火焰伤害和着火时间"
+}

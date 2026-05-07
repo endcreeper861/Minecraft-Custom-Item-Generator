@@ -1,0 +1,6 @@
+{
+    "name": "绑定诅咒",
+    "id": "minecraft:binding_curse",
+    "max_level": 1,
+    "description": "受影响物品在装备时不能被卸下，玩家处于创造模式则不受影响"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "保护",
+    "id": "minecraft:protection",
+    "max_level": 4,
+    "description": "减少受到的大多数种类的伤害"
+}
