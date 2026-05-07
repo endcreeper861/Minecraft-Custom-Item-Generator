@@ -8,6 +8,10 @@
 - `name`: 状态效果名称
 - `id`: 状态效果 ID（如 `minecraft:strength`）
 - `description`: 可选的状态效果描述
+- `amplifier`: 可选的状态效果等级（倍率），默认为 0
+- `duration`: 可选的状态效果持续时间，单位为刻，为 -1 则代表无限时间。
+- `show_particles`: 可选的布尔值，表示是否显示状态效果粒子，默认为 True。
+- `show_icon`: 可选的布尔值，表示是否在状态栏显示状态效果图标，默认和 `show_particles` 相同。
 
 状态效果组文件是一个数组，是多个状态效果及其等级的组合。游戏保存的是“倍率”（amplifier）值而不是等级。倍率比等级小1，例如力量II的倍率为1。
 
@@ -40,6 +44,7 @@
 """
 
 from dataclasses import dataclass
+from typing import Any
 from pathlib import Path
 from json import load
 import logging
@@ -56,15 +61,26 @@ class Effect:
     id: str
     description: str = ""
     amplifier: int = 0
+    duration: int = 0
+    show_particles: bool = True
+    show_icon: bool | None = None
 
     def to_dict(self) -> dict:
         """将 Effect 对象转换为 JSON 可序列化的字典"""
-        return {
+        dict_repr: dict[str, Any] = {
             "name": self.name,
             "id": self.id,
-            "description": self.description,
-            "amplifier": self.amplifier,
+            "description": self.description
         }
+        if self.amplifier != 0:
+            dict_repr["amplifier"] = self.amplifier
+        if self.duration != 0:
+            dict_repr["duration"] = self.duration
+        if self.show_particles is False:
+            dict_repr["show_particles"] = False
+        if self.show_icon is not None:
+            dict_repr["show_icon"] = self.show_icon
+        return dict_repr
 
 
 @dataclass

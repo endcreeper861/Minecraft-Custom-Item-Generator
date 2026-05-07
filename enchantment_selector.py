@@ -3,7 +3,7 @@ import logging
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QEventLoop, Qt
+from PyQt6.QtCore import QEventLoop, Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -78,8 +78,10 @@ class CustomTableWidget(QTableWidget):
 
 
 class EnchantmentWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+    closed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.setWindowTitle("附魔选择器")
         self.resize(1000, 600)
 
@@ -173,6 +175,10 @@ class EnchantmentWindow(QMainWindow):
         splitter.setSizes([500, 500])
 
         main_layout.addWidget(splitter)
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)
 
     def populate_all_table(self, filter_text=""):
         logger.debug("填充全部附魔表，筛选=%r", filter_text)
@@ -414,7 +420,7 @@ class EnchantmentWindow(QMainWindow):
         self.close()
 
 
-def open_enchantment_selector():
+def open_enchantment_selector(parent=None):
     """
     打开附魔选择器窗口并阻塞直到窗口关闭。
 
@@ -428,8 +434,11 @@ def open_enchantment_selector():
         app = QApplication(sys.argv)
         app_created = True
 
-    window = EnchantmentWindow()
+    window = EnchantmentWindow(parent=parent)
+    if parent is not None:
+        window.setWindowModality(Qt.WindowModality.WindowModal)
     window.show()
+    window.activateWindow()
 
     if app_created:
         # 如果我们创建了 QApplication，就运行主循环直到退出
@@ -441,6 +450,7 @@ def open_enchantment_selector():
     else:
         # 如果已有运行的 QApplication，使用局部事件循环等待窗口销毁
         loop = QEventLoop()
+        window.closed.connect(loop.quit)
         window.destroyed.connect(loop.quit)
         loop.exec()
         saved = getattr(window, "saved_group", None)

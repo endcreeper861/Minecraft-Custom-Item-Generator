@@ -3,11 +3,13 @@ import logging
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QEventLoop, Qt
+from PyQt6.QtCore import QEventLoop, Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
 	QAbstractItemView,
 	QApplication,
+	QCheckBox,
+	QComboBox,
 	QGroupBox,
 	QHBoxLayout,
 	QHeaderView,
@@ -39,9 +41,7 @@ class CustomTableWidget(QTableWidget):
 	def __init__(self, parent=None, is_source=True):
 		super().__init__(parent)
 		self.is_source = is_source  # True表示是右侧"全部"，False表示左侧"已选"
-		self.setEditTriggers(
-			QAbstractItemView.EditTrigger.NoEditTriggers
-		)  # 禁止直接编辑文本
+		self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 		self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 		self.setShowGrid(False)
 		self.verticalHeader().setVisible(False)  # type: ignore
@@ -67,7 +67,6 @@ class CustomTableWidget(QTableWidget):
 		if item:
 			row = item.row()
 			logger.debug("表格被点击：行=%s is_source=%s", row, self.is_source)
-			# 使用 self.window() 获取主窗口
 			main_window = self.window()
 			if isinstance(main_window, EffectWindow):
 				if self.is_source:
@@ -78,15 +77,17 @@ class CustomTableWidget(QTableWidget):
 
 
 class EffectWindow(QMainWindow):
-	def __init__(self):
-		super().__init__()
+	closed = pyqtSignal()
+
+	def __init__(self, parent=None):
+		super().__init__(parent)
 		self.setWindowTitle("状态效果选择器")
-		self.resize(1000, 600)
+		self.resize(1100, 650)
 
 		# 存储当前所有可用的状态效果数据（用于搜索和恢复）
 		self.all_effects = effect.get_all_effects()
 		logger.info("已加载 %d 个状态效果", len(self.all_effects))
-		# 存储已选状态效果的 ID 集合，防止重复添加
+		# 存储已选效果的 ID 集合，防止重复添加
 		self.selected_ids = set()
 		# 保存后返回的 EffectGroup（若未保存则为 None）
 		self.saved_group = None
@@ -104,7 +105,6 @@ class EffectWindow(QMainWindow):
 		# --- 顶部区域 ---
 		top_layout = QHBoxLayout()
 
-		# 左侧：加载/保存预设按钮
 		self.load_preset_btn = QPushButton("加载预设")
 		self.load_preset_btn.setFixedHeight(35)
 		self.load_preset_btn.clicked.connect(self.load_preset)
@@ -115,10 +115,8 @@ class EffectWindow(QMainWindow):
 		self.save_preset_btn.clicked.connect(self.save_preset)
 		top_layout.addWidget(self.save_preset_btn)
 
-		# 在左侧按钮和右侧“确定”之间添加伸缩，使“确定”靠右
 		top_layout.addStretch(1)
 
-		# 右侧“确定”按钮
 		self.ok_btn = QPushButton("确定")
 		self.ok_btn.setFixedHeight(35)
 		self.ok_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
@@ -134,20 +132,26 @@ class EffectWindow(QMainWindow):
 		left_group = QGroupBox("已选状态效果（点击移除）")
 		left_layout = QVBoxLayout(left_group)
 		self.selected_table = CustomTableWidget(self, is_source=False)
-		self.selected_table.setColumnCount(4)
-		self.selected_table.setHorizontalHeaderLabels(["名称", "ID", "描述", "倍率"])
+		self.selected_table.setColumnCount(6)
+		self.selected_table.setHorizontalHeaderLabels(
+			["名称", "ID", "倍率", "持续时间", "粒子", "图标"]
+		)
 		self.selected_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # type: ignore
 		self.selected_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)  # type: ignore
-		self.selected_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)  # type: ignore
+		self.selected_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)  # type: ignore
 		self.selected_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)  # type: ignore
-		self.selected_table.setColumnWidth(3, 100)  # 倍率列固定宽度
+		self.selected_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)  # type: ignore
+		self.selected_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)  # type: ignore
+		self.selected_table.setColumnWidth(2, 40)
+		self.selected_table.setColumnWidth(3, 70)
+		self.selected_table.setColumnWidth(4, 50)
+		self.selected_table.setColumnWidth(5, 80)
 		left_layout.addWidget(self.selected_table)
 
 		# 右侧：全部状态效果
 		right_group = QGroupBox("全部状态效果（点击选择）")
 		right_layout = QVBoxLayout(right_group)
 
-		# 搜索框
 		self.search_input = QLineEdit()
 		self.search_input.setPlaceholderText("表格筛选：输入名称或ID搜索...")
 		self.search_input.textChanged.connect(self.filter_table)
@@ -160,25 +164,25 @@ class EffectWindow(QMainWindow):
 		self.all_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)  # type: ignore
 		self.all_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)  # type: ignore
 
-		# 初始化右侧表格数据
 		self.populate_all_table()
-
 		right_layout.addWidget(self.all_table)
 
 		splitter.addWidget(left_group)
 		splitter.addWidget(right_group)
 		splitter.setStretchFactor(0, 1)
 		splitter.setStretchFactor(1, 1)
-		# 设置初始大小为等分，确保左右各占一半
-		splitter.setSizes([500, 500])
+		splitter.setSizes([550, 550])
 
 		main_layout.addWidget(splitter)
 
+	def closeEvent(self, event):
+		self.closed.emit()
+		super().closeEvent(event)
+
 	def populate_all_table(self, filter_text=""):
 		logger.debug("填充全部状态效果表，筛选=%r", filter_text)
-		self.all_table.setRowCount(0)  # 清空
+		self.all_table.setRowCount(0)
 		for data in self.all_effects:
-			# 简单的搜索过滤
 			if (
 				filter_text
 				and filter_text.lower() not in data.name.lower()
@@ -189,13 +193,9 @@ class EffectWindow(QMainWindow):
 			row_pos = self.all_table.rowCount()
 			self.all_table.insertRow(row_pos)
 
-			item_name = QTableWidgetItem(data.name)
-			item_id = QTableWidgetItem(data.id)
-			item_desc = QTableWidgetItem(data.description)
-
-			self.all_table.setItem(row_pos, 0, item_name)
-			self.all_table.setItem(row_pos, 1, item_id)
-			self.all_table.setItem(row_pos, 2, item_desc)
+			self.all_table.setItem(row_pos, 0, QTableWidgetItem(data.name))
+			self.all_table.setItem(row_pos, 1, QTableWidgetItem(data.id))
+			self.all_table.setItem(row_pos, 2, QTableWidgetItem(data.description))
 		logger.debug("填充全部状态效果表完成，行数=%d", self.all_table.rowCount())
 
 	def filter_table(self, text):
@@ -204,7 +204,6 @@ class EffectWindow(QMainWindow):
 
 	def move_to_selected(self, row):
 		logger.debug("将状态效果移到已选：行=%s", row)
-		# 获取右侧表格该行的数据
 		item_id_item = self.all_table.item(row, 1)
 		if not item_id_item:
 			logger.warning("未在第 %s 行找到项目", row)
@@ -212,8 +211,8 @@ class EffectWindow(QMainWindow):
 		item_id = item_id_item.text()
 
 		if item_id in self.selected_ids:
-			logger.warning("尝试添加重复状态效果 id=%s", item_id)
-			return  # 防止重复添加
+			logger.warning("尝试添加重复效果 id=%s", item_id)
+			return
 
 		name_item = self.all_table.item(row, 0)
 		desc_item = self.all_table.item(row, 2)
@@ -224,56 +223,66 @@ class EffectWindow(QMainWindow):
 		name = name_item.text()
 		desc = desc_item.text()
 
-		# 添加到左侧表格
+		original_data = next((x for x in self.all_effects if x.id == item_id), None)
+		if not original_data:
+			logger.warning("未找到 id=%s 的原始数据", item_id)
+			return
+
 		row_pos = self.selected_table.rowCount()
 		self.selected_table.insertRow(row_pos)
 
 		self.selected_table.setItem(row_pos, 0, QTableWidgetItem(name))
 		self.selected_table.setItem(row_pos, 1, QTableWidgetItem(item_id))
-		self.selected_table.setItem(row_pos, 2, QTableWidgetItem(desc))
 
-		# 创建倍率输入框
 		amplifier_input = QLineEdit()
 		amplifier_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
-		amplifier_input.setPlaceholderText("倍率(>=0)")
+		amplifier_input.setPlaceholderText("默认0")
 		amplifier_input.setStyleSheet(
 			"QLineEdit { border: 1px solid #ccc; border-radius: 2px; }"
 		)
+		self.selected_table.setCellWidget(row_pos, 2, amplifier_input)
 
-		self.selected_table.setCellWidget(row_pos, 3, amplifier_input)
+		duration_input = QLineEdit()
+		duration_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+		duration_input.setPlaceholderText("刻，-1无限")
+		duration_input.setStyleSheet(
+			"QLineEdit { border: 1px solid #ccc; border-radius: 2px; }"
+		)
+		self.selected_table.setCellWidget(row_pos, 3, duration_input)
 
-		# 标记为已选
+		particles_check = QCheckBox()
+		particles_check.setChecked(True)
+		particles_check.setTristate(False)
+		particles_check.setStyleSheet("QCheckBox { margin-left: 18px; }")
+		self.selected_table.setCellWidget(row_pos, 4, particles_check)
+
+		icon_combo = QComboBox()
+		icon_combo.addItems(["默认", "显示", "隐藏"])
+		icon_combo.setCurrentIndex(0)
+		self.selected_table.setCellWidget(row_pos, 5, icon_combo)
+
 		self.selected_ids.add(item_id)
-		logger.info("已添加状态效果：%s（%s）", name, item_id)
+		logger.info("已添加效果：%s（%s）", name, item_id)
 
-		# 刷新表格显示
-		logger.debug("选择后刷新表格，id=%s", item_id)
 		self.refresh_tables()
 
 	def move_to_unselected(self, row):
 		logger.debug("将状态效果从已选移出：行=%s", row)
-		# 获取左侧表格该行的 ID
 		item_id_item = self.selected_table.item(row, 1)
 		if not item_id_item:
 			logger.warning("未在第 %s 行找到项目（取消选择）", row)
 			return
 		item_id = item_id_item.text()
 
-		# 从已选集合移除
 		if item_id in self.selected_ids:
 			self.selected_ids.remove(item_id)
-			logger.info("已从已选集合移除状态效果 id=%s", item_id)
+			logger.info("已从已选集合移除效果 id=%s", item_id)
 
-		# 从左侧表格移除行
 		self.selected_table.removeRow(row)
-
-		# 刷新右侧表格以显示刚才移除的项目
-		logger.debug("取消选择后刷新表格，id=%s", item_id)
 		self.refresh_tables()
 
 	def refresh_tables(self):
 		logger.debug("刷新表格调用")
-		# 刷新右侧表格（恢复被移除的项）
 		current_filter = self.search_input.text()
 		logger.debug("刷新表格，使用筛选=%r", current_filter)
 		self.populate_all_table(current_filter)
@@ -293,23 +302,46 @@ class EffectWindow(QMainWindow):
 			desc = original.description if original else ""
 
 			amplifier = 0
-			widget = self.selected_table.cellWidget(row, 3)
-			if widget:
+			amp_widget = self.selected_table.cellWidget(row, 2)
+			if amp_widget:
 				try:
-					text = widget.text().strip()  # type: ignore
+					text = amp_widget.text().strip()  # type: ignore
 					if text:
 						amplifier = int(text)
 				except Exception:
 					amplifier = 0
 
-			if amplifier < 0:
-				amplifier = 0
+			duration = 0
+			duration_widget = self.selected_table.cellWidget(row, 3)
+			if duration_widget:
+				try:
+					text = duration_widget.text().strip()  # type: ignore
+					if text:
+						duration = int(text)
+				except Exception:
+					duration = 0
+
+			show_particles = True
+			particles_widget = self.selected_table.cellWidget(row, 4)
+			if isinstance(particles_widget, QCheckBox):
+				show_particles = particles_widget.isChecked()
+
+			show_icon = None
+			icon_widget = self.selected_table.cellWidget(row, 5)
+			if isinstance(icon_widget, QComboBox):
+				if icon_widget.currentIndex() == 1:
+					show_icon = True
+				elif icon_widget.currentIndex() == 2:
+					show_icon = False
 
 			eff = effect.Effect(
 				name=name,
 				id=item_id,
 				description=desc,
 				amplifier=amplifier,
+				duration=duration,
+				show_particles=show_particles,
+				show_icon=show_icon,
 			)
 			effects.append(eff)
 		logger.debug("收集完成，共 %d 个状态效果", len(effects))
@@ -361,7 +393,6 @@ class EffectWindow(QMainWindow):
 			else:
 				entries = data
 
-			# 清空当前已选
 			self.selected_table.setRowCount(0)
 			self.selected_ids.clear()
 
@@ -374,6 +405,9 @@ class EffectWindow(QMainWindow):
 				name = entry.get("name", "")
 				desc = entry.get("description", "")
 				amplifier = entry.get("amplifier", 0)
+				duration = entry.get("duration", 0)
+				show_particles = entry.get("show_particles", True)
+				show_icon = entry.get("show_icon", None)
 
 				row_pos = self.selected_table.rowCount()
 				self.selected_table.insertRow(row_pos)
@@ -384,8 +418,28 @@ class EffectWindow(QMainWindow):
 				amplifier_input = QLineEdit()
 				amplifier_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
 				amplifier_input.setText(str(amplifier) if amplifier is not None else "")
-				amplifier_input.setPlaceholderText("倍率(>=0)")
 				self.selected_table.setCellWidget(row_pos, 3, amplifier_input)
+
+				duration_input = QLineEdit()
+				duration_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+				duration_input.setText(str(duration) if duration is not None else "")
+				self.selected_table.setCellWidget(row_pos, 4, duration_input)
+
+				particles_check = QCheckBox()
+				particles_check.setChecked(bool(show_particles))
+				particles_check.setTristate(False)
+				particles_check.setStyleSheet("QCheckBox { margin-left: 18px; }")
+				self.selected_table.setCellWidget(row_pos, 5, particles_check)
+
+				icon_combo = QComboBox()
+				icon_combo.addItems(["默认", "显示", "隐藏"])
+				if show_icon is True:
+					icon_combo.setCurrentIndex(1)
+				elif show_icon is False:
+					icon_combo.setCurrentIndex(2)
+				else:
+					icon_combo.setCurrentIndex(0)
+				self.selected_table.setCellWidget(row_pos, 6, icon_combo)
 
 				self.selected_ids.add(item_id)
 
@@ -399,12 +453,15 @@ class EffectWindow(QMainWindow):
 
 	def confirm_group(self):
 		group = self.collect_group()
-		logger.info("确认状态效果组，共 %d 个状态效果", len(group.effects) if hasattr(group, "effects") else 0)
+		logger.info(
+			"确认状态效果组，共 %d 个效果",
+			len(group.effects) if hasattr(group, "effects") else 0,
+		)
 		self.saved_group = group
 		self.close()
 
 
-def open_effect_selector():
+def open_effect_selector(parent=None):
 	"""
 	打开状态效果选择器窗口并阻塞直到窗口关闭。
 
@@ -418,11 +475,13 @@ def open_effect_selector():
 		app = QApplication(sys.argv)
 		app_created = True
 
-	window = EffectWindow()
+	window = EffectWindow(parent=parent)
+	if parent is not None:
+		window.setWindowModality(Qt.WindowModality.WindowModal)
 	window.show()
+	window.activateWindow()
 
 	if app_created:
-		# 如果我们创建了 QApplication，就运行主循环直到退出
 		logger.debug("运行 app.exec()（已创建 QApplication）")
 		app.exec()
 		saved = getattr(window, "saved_group", None)
@@ -432,8 +491,8 @@ def open_effect_selector():
 		)
 		return saved
 	else:
-		# 如果已有运行的 QApplication，使用局部事件循环等待窗口销毁
 		loop = QEventLoop()
+		window.closed.connect(loop.quit)
 		window.destroyed.connect(loop.quit)
 		loop.exec()
 		saved = getattr(window, "saved_group", None)

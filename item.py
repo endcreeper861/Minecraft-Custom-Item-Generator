@@ -89,7 +89,10 @@ class Item:
     def item_stack(self) -> str:
         """生成物品堆叠字符串"""
         if self.components:
-            components_str = ",".join(f"{k}={dumps(v)}" for k, v in self.components.items())
+            components_str = ",".join(
+                f"{k}={dumps(v, separators=(',', ':'))}"
+                for k, v in self.components.items()
+            )
             return f"{self.id}[{components_str}]"
         else:
             return f"{self.id}"

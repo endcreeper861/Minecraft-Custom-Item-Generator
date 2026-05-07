@@ -387,22 +387,190 @@ def load_component(
 
         case {"type": "effect", "description": description}:
             layout.addWidget(QLabel(description + "："))
+            selected_label = QLabel("未选择")
+            selected_label.setMinimumWidth(200)
+            layout.addWidget(selected_label)
             button = QPushButton("选择状态效果")
             logger.debug("创建状态效果选择按钮: %s", description)
             layout.addWidget(button)
             layout.addStretch()
 
+            def _strip_effect_dict(effect: dict) -> dict:
+                return {
+                    key: value
+                    for key, value in effect.items()
+                    if key not in {"name", "description"}
+                }
+
+            def _sanitize_effect_payload(payload: dict | list | None) -> dict | list | None:
+                if payload is None:
+                    return None
+                if isinstance(payload, list):
+                    return [
+                        _strip_effect_dict(entry) if isinstance(entry, dict) else entry
+                        for entry in payload
+                    ]
+                if isinstance(payload, dict):
+                    effects = payload.get("effects")
+                    if isinstance(effects, list):
+                        sanitized = dict(payload)
+                        sanitized["effects"] = [
+                            _strip_effect_dict(entry)
+                            if isinstance(entry, dict)
+                            else entry
+                            for entry in effects
+                        ]
+                        sanitized.pop("name", None)
+                        sanitized.pop("description", None)
+                        return sanitized
+                    return _strip_effect_dict(payload)
+                return payload
+
+            def _effect_payload_count(payload: dict | list | None) -> int:
+                if isinstance(payload, list):
+                    return len(payload)
+                if isinstance(payload, dict):
+                    effects = payload.get("effects")
+                    if isinstance(effects, list):
+                        return len(effects)
+                return 0
+
+            def set_effect_selected_display(count: int | None):
+                if count is None or count <= 0:
+                    selected_label.setText("未选择")
+                else:
+                    selected_label.setText(f"已选择 {count} 个状态效果")
+
+            def set_effect_selected_from_payload(payload: dict | list | None):
+                if not payload:
+                    selected_label.setText("未选择")
+                    return
+                if isinstance(payload, list):
+                    set_effect_selected_display(len(payload))
+                    return
+                if isinstance(payload, dict):
+                    effects = payload.get("effects")
+                    if isinstance(effects, list):
+                        set_effect_selected_display(len(effects))
+                        return
+                selected_label.setText("未选择")
+
+            def get_effect_existing_payload() -> dict | list | None:
+                if field_key is None:
+                    return item.components.get(id)
+                container = data_root_getter()
+                if isinstance(container, dict):
+                    return container.get(field_key)
+                return None
+
+            set_effect_selected_from_payload(get_effect_existing_payload())
+
+            def on_select_effect():
+                try:
+                    import effect_selector
+                except Exception:
+                    logger.exception("导入 effect_selector 失败")
+                    return
+
+                selected = effect_selector.open_effect_selector(parent=button.window())
+                if selected is None:
+                    return
+
+                payload = _sanitize_effect_payload(selected.to_dict())
+                if field_key is None:
+                    item.components[id] = payload
+                else:
+                    container = data_root_getter()
+                    if isinstance(container, dict):
+                        container[field_key] = payload
+
+                set_effect_selected_display(_effect_payload_count(payload))
+
+            button.clicked.connect(on_select_effect)
+
+        case {"type": "enchantment", "description": description}:
+            layout.addWidget(QLabel(description + "："))
+            selected_label = QLabel("未选择")
+            selected_label.setMinimumWidth(200)
+            layout.addWidget(selected_label)
+            button = QPushButton("选择附魔")
+            logger.debug("创建附魔选择按钮: %s", description)
+            layout.addWidget(button)
+            layout.addStretch()
+
+            def set_enchantment_selected_display(count: int | None):
+                if count is None or count <= 0:
+                    selected_label.setText("未选择")
+                else:
+                    selected_label.setText(f"已选择 {count} 个附魔")
+
+            def set_enchantment_selected_from_payload(payload: dict | list | None):
+                if not payload:
+                    selected_label.setText("未选择")
+                    return
+                if isinstance(payload, dict):
+                    set_enchantment_selected_display(len(payload))
+                    return
+                if isinstance(payload, list):
+                    set_enchantment_selected_display(len(payload))
+                    return
+                selected_label.setText("未选择")
+
+            def get_enchantment_existing_payload() -> dict | list | None:
+                if field_key is None:
+                    return item.components.get(id)
+                container = data_root_getter()
+                if isinstance(container, dict):
+                    return container.get(field_key)
+                return None
+
+            set_enchantment_selected_from_payload(get_enchantment_existing_payload())
+
+            def build_enchantment_payload(group) -> dict:
+                payload: dict[str, int] = {}
+                enchantments = getattr(group, "enchantments", None)
+                if not enchantments:
+                    return payload
+                for ench in enchantments:
+                    ench_id = getattr(ench, "id", None)
+                    if not ench_id:
+                        continue
+                    try:
+                        level = int(getattr(ench, "level", 1))
+                    except Exception:
+                        level = 1
+                    payload[ench_id] = level
+                return payload
+
+            def on_select_enchantment():
+                try:
+                    import enchantment_selector
+                except Exception:
+                    logger.exception("导入 enchantment_selector 失败")
+                    return
+
+                selected = enchantment_selector.open_enchantment_selector(
+                    parent=button.window()
+                )
+                if selected is None:
+                    return
+
+                payload = build_enchantment_payload(selected)
+                if field_key is None:
+                    item.components[id] = payload
+                else:
+                    container = data_root_getter()
+                    if isinstance(container, dict):
+                        container[field_key] = payload
+
+                set_enchantment_selected_display(len(payload))
+
+            button.clicked.connect(on_select_enchantment)
+        
         case {"type": "sound_event", "description": description}:
             layout.addWidget(QLabel(description + "："))
             button = QPushButton("选择声音事件")
             logger.debug("创建声音事件选择按钮: %s", description)
-            layout.addWidget(button)
-            layout.addStretch()
-
-        case {"type": "enchantment", "description": description}:
-            layout.addWidget(QLabel(description + "："))
-            button = QPushButton("选择附魔")
-            logger.debug("创建附魔选择按钮: %s", description)
             layout.addWidget(button)
             layout.addStretch()
 
