@@ -34,7 +34,7 @@
             },
             "on_consume_effects": {
                 "type": "list",
-                "description": "使用时效果列表",
+                "description": "使用后效果列表",
                 "values": {
                     "type": "enum",
                     "description": "效果类型",
@@ -65,8 +65,18 @@
                                 "type": "dict",
                                 "values": {
                                     "sound": {
-                                        "type": "sound_event",
-                                        "description": "要播放的声音"
+                                        "type": "dict",
+                                        "values": {
+                                            "sound_id": {
+                                                "type": "string",
+                                                "description": "要播放的声音事件ID"
+                                            },
+                                            "range": {
+                                                "type": "float",
+                                                "description": "声音传播距离（格）",
+                                                "place_holder_text": "默认16倍初始音量"
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -100,8 +110,19 @@
                 }
             },
             "sound": {
-                "type": "sound_event",
-                "description": "使用物品时产生的声音"
+                "type": "dict",
+                "values": {
+                    "sound_id": {
+                        "type": "string",
+                        "description": "要播放的声音事件ID",
+                        "place_holder_text": "默认为entity.generic.eat"
+                    },
+                    "range": {
+                        "type": "float",
+                        "description": "声音传播距离（格）",
+                        "place_holder_text": "默认16倍初始音量"
+                    }
+                }
             }
         }
     }

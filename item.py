@@ -10,7 +10,7 @@
 - `count`: 物品数量，默认为 1
 
 示例：
-```
+```json
 {
     "name": "钻石剑",
     "id": "minecraft:diamond_sword",
@@ -120,6 +120,19 @@ def get_all_items() -> list[Item]:
                     name=data["name"],
                     id=data["id"],
                     categories=data["categories"],
+                    components=data.get("components", {}),
+                    count=data.get("count", 1),
+                )
+            )
+    
+    for f in Path("custom/items").glob("*.json"):
+        with f.open("r", encoding="utf-8") as file:
+            data = load(file)
+            item_list.append(
+                Item(
+                    name=f.stem,  # 使用文件名作为物品名称
+                    id=data["id"],
+                    categories=["custom"],
                     components=data.get("components", {}),
                     count=data.get("count", 1),
                 )

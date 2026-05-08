@@ -8,13 +8,25 @@ import os
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QPoint, QRect, QSize, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPixmap
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
-                             QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-                             QLayout, QLayoutItem, QLineEdit, QMessageBox,
-                             QPlainTextEdit, QPushButton, QScrollArea,
-                             QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 import component
 import item
@@ -22,6 +34,8 @@ import item_selector
 import utils
 
 logger = logging.getLogger(__name__)
+
+TOGGLE_DEFAULT_UNSET = object()
 
 
 class ItemEditorDialog(QDialog):
@@ -53,8 +67,7 @@ class ItemEditorDialog(QDialog):
         self.save_name_edit = QLineEdit()
         self.save_name_edit.setPlaceholderText("输入文件名（不含.json）")
         self.save_name_edit.setMinimumWidth(160)
-        self.save_name_edit.setStyleSheet(
-            """
+        self.save_name_edit.setStyleSheet("""
             QLineEdit {
                 padding: 6px;
                 border-radius: 4px;
@@ -63,8 +76,7 @@ class ItemEditorDialog(QDialog):
             QLineEdit:focus {
                 border: 2px solid #3498db;
             }
-            """
-        )
+            """)
         save_layout.addWidget(self.save_name_edit)
 
         self.save_btn = QPushButton("保存")
@@ -72,7 +84,7 @@ class ItemEditorDialog(QDialog):
         self.save_btn.setMinimumWidth(80)
         self.save_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
         save_layout.addWidget(self.save_btn)
-        
+
         self.generate_btn = QPushButton("生成命令")
         self.generate_btn.clicked.connect(self.on_generate)
         self.generate_btn.setMinimumWidth(80)
@@ -173,12 +185,21 @@ class ItemEditorDialog(QDialog):
                     comp_id = comp_data["id"]
                     comp_desc = comp_data["description"]
                     comp_check_box = QCheckBox(comp_desc)
-                    if comp_data.get("components", {}) != {}:
+                    component_def = comp_data.get("components", {})
+                    if component_def != {}:
                         comp_group = QGroupBox(comp_desc)
                         comp_group.setVisible(False)
                         comp_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
+                        default_value = TOGGLE_DEFAULT_UNSET
+                        if (
+                            isinstance(component_def, dict)
+                            and component_def.get("type") == "bool"
+                        ):
+                            default_value = component_def.get("default", False)
                         comp_check_box.stateChanged.connect(
-                            self._gen_toggle_component(comp_check_box, comp_id, comp_group)
+                            self._gen_toggle_component(
+                                comp_check_box, comp_id, comp_group, default_value
+                            )
                         )
 
                         comp_layout = QVBoxLayout(comp_group)
@@ -186,13 +207,13 @@ class ItemEditorDialog(QDialog):
                         comp_layout.setSpacing(10)
 
                         layout = component.load_component(
-                            comp_data["components"], self.current_item, comp_id
+                            component_def, self.current_item, comp_id
                         )
                         comp_layout.addLayout(layout)
 
                         self.content_groups.append(comp_group)
 
-                    if comp_data.get("components", {}) == {}:
+                    if component_def == {}:
                         comp_check_box.stateChanged.connect(
                             self._gen_toggle_component(comp_check_box, comp_id)
                         )
@@ -223,7 +244,11 @@ class ItemEditorDialog(QDialog):
         self.current_item.count = value
 
     def _gen_toggle_component(
-        self, check_box: QCheckBox, comp_id: str, group_box: QGroupBox | None = None
+        self,
+        check_box: QCheckBox,
+        comp_id: str,
+        group_box: QGroupBox | None = None,
+        default_value=TOGGLE_DEFAULT_UNSET,
     ):
         """工厂函数，切换组件启用状态并同步到 Item.components。"""
 
@@ -231,7 +256,10 @@ class ItemEditorDialog(QDialog):
             is_checked = check_box.isChecked()
             if is_checked:
                 if comp_id not in self.current_item.components:
-                    self.current_item.components[comp_id] = {}
+                    if default_value is TOGGLE_DEFAULT_UNSET:
+                        self.current_item.components[comp_id] = {}
+                    else:
+                        self.current_item.components[comp_id] = default_value
             else:
                 self.current_item.components.pop(comp_id, None)
             if group_box is not None:
@@ -393,15 +421,16 @@ class ItemEditorDialog(QDialog):
             return
 
         # 确保data/items目录存在
-        save_dir = "data/items"
-        os.makedirs(save_dir, exist_ok=True)
+        save_dir = Path("custom/items")
+        save_dir.mkdir(parents=True, exist_ok=True)
 
         # 构建保存路径
-        save_path = os.path.join(save_dir, f"{save_name}.json")
+        save_path = save_dir / f"{save_name}.json"
 
         try:
             # 使用Item的to_json方法生成JSON内容
             json_content = self.current_item.to_dict()
+            del json_content["categories"]  # 不保存分类信息
 
             # 写入文件
             with open(save_path, "w", encoding="utf-8") as f:
@@ -421,7 +450,9 @@ class ItemEditorDialog(QDialog):
             return
 
         item_stack = self.current_item.item_stack()
-        command = f"/give @s {item_stack} {self.current_item.count}"
+        command = f"/give @p {item_stack}"
+        if self.current_item.count != 1:
+            command += f" {self.current_item.count}"
 
         dialog = QDialog(self)
         dialog.setWindowTitle("命令窗口")
@@ -430,6 +461,15 @@ class ItemEditorDialog(QDialog):
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
+
+        if len(command) > 256:
+            command = command.removeprefix("/")
+            warning_label = QLabel(
+                "命令长度超过256个字符，请在命令方块或服务器控制台中执行。"
+            )
+            warning_label.setWordWrap(True)
+            warning_label.setStyleSheet("font-weight: bold;")
+            layout.addWidget(warning_label)
 
         text_box = QPlainTextEdit()
         text_box.setReadOnly(True)
@@ -448,7 +488,7 @@ class ItemEditorDialog(QDialog):
         copy_btn.setStyleSheet(utils.BIG_GREEN_BUTTON_STYLE)
 
         def copy_command():
-            QGuiApplication.clipboard().setText(command) # type: ignore
+            QGuiApplication.clipboard().setText(command)  # type: ignore
 
         copy_btn.clicked.connect(copy_command)
         button_layout.addWidget(copy_btn)

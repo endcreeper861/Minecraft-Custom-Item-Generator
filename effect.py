@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 
 
 EFFECT_DATA_DIR = "data/effects/"
+ALL_EFFECTS: list[Effect] = []
 
 
 @dataclass
@@ -90,6 +91,20 @@ class EffectGroup:
     def to_dict(self) -> list[dict]:
         """将 EffectGroup 对象转换为 JSON 可序列化的列表"""
         return [effect.to_dict() for effect in self.effects]
+    
+    @classmethod
+    def from_nbt(cls, nbt_data: dict[str, Any]) -> "EffectGroup":
+        """从 NBT 数据创建 EffectGroup 对象"""
+        effects = []
+        for id, data in nbt_data.items():
+            effect = next((e for e in ALL_EFFECTS if e.id == id), None)
+            if effect:
+                effect.amplifier = data.get("amplifier", 0)
+                effect.duration = data.get("duration", 0)
+                effect.show_particles = data.get("show_particles", True)
+                effect.show_icon = data.get("show_icon", None)
+                effects.append(effect)
+        return cls(effects=effects)
 
 
 def get_all_effects() -> list[Effect]:
@@ -102,4 +117,8 @@ def get_all_effects() -> list[Effect]:
                 effects.append(Effect(**data))
         except Exception as e:
             logger.error(f"加载状态效果数据失败: {f.name} - {e}")
+    
+    global ALL_EFFECTS
+    ALL_EFFECTS = effects
+    
     return effects

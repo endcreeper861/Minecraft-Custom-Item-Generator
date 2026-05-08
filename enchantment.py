@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 
 ENCHANTMENT_DATA_DIR = "data/enchantments/"
+ALL_ENCHANTMENTS: list[Enchantment] = []
 
 
 @dataclass
@@ -80,6 +81,17 @@ class EnchantmentGroup:
     def to_dict(self) -> list[dict]:
         """将 EnchantmentGroup 对象转换为 JSON 可序列化的字典"""
         return [enchantment.to_dict() for enchantment in self.enchantments]
+    
+    @classmethod
+    def from_nbt(cls, nbt_data: dict[str, int]) -> "EnchantmentGroup":
+        """从 NBT 数据创建 EnchantmentGroup 对象"""
+        group = cls(enchantments=[])
+        for id, level in nbt_data.items():
+            enchantment = next((e for e in ALL_ENCHANTMENTS if e.id == id), None)
+            if enchantment:
+                enchantment.level = level
+                group.enchantments.append(enchantment)
+        return group
 
 
 def get_all_enchantments() -> list[Enchantment]:
@@ -92,4 +104,10 @@ def get_all_enchantments() -> list[Enchantment]:
                 enchantments.append(Enchantment(**data))
         except Exception as e:
             logger.error(f"加载附魔数据失败: {f.name} - {e}")
+    
+    global ALL_ENCHANTMENTS
+    ALL_ENCHANTMENTS = enchantments
+    
     return enchantments
+
+get_all_enchantments()

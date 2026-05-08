@@ -1,0 +1,47 @@
+{
+    "id": "tool",
+    "description": "挖掘工具属性",
+    "components": {
+        "type": "dict",
+        "values": {
+            "can_destroy_blocks_in_creative": {
+                "type": "bool",
+                "default": true,
+                "description": "创造模式玩家能使用此物品破坏方块"
+            },
+            "damage_per_block": {
+                "type": "int",
+                "description": "破坏硬度非0的方块时物品损失的耐久度",
+                "place_holder_text": "整数，值≥0，默认为1"
+            },
+            "default_mining_speed": {
+                "type": "float",
+                "description": "挖掘方块时的速度",
+                "place_holder_text": "浮点数，值≥0，默认为1.0"
+            },
+            "rules": {
+                "type": "list",
+                "description": "挖掘规则列表",
+                "values": {
+                    "type": "dict",
+                    "values": {
+                        "blocks": {
+                            "type": "block_filter",
+                            "description": "适用此规则的方块ID或方块列表"
+                        },
+                        "correct_for_drops": {
+                            "type": "bool",
+                            "default": false,
+                            "description": "合适挖掘工具"
+                        },
+                        "speed": {
+                            "type": "float",
+                            "description": "挖掘该方块的速度",
+                            "place_holder_text": "浮点数，值≥0，默认为1.0"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

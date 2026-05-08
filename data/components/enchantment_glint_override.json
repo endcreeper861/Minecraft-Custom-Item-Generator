@@ -1,0 +1,9 @@
+{
+    "id": "enchantment_glint_override",
+    "description": "控制附魔光效",
+    "components": {
+        "type": "bool",
+        "default": false,
+        "description": "显示光效"
+    }
+}

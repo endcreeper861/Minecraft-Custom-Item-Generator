@@ -5,8 +5,16 @@
 import logging
 from typing import TYPE_CHECKING, Callable
 
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QGroupBox, QHBoxLayout,
-                             QLabel, QLineEdit, QPushButton, QVBoxLayout)
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+)
 
 import item
 import utils
@@ -87,20 +95,27 @@ def load_component(
             field_type = data["type"]
 
             def on_text_changed(text: str):
-                container = data_root_getter()
-                if container is None or not isinstance(container, dict):
-                    return
-                if field_key is None:
-                    return
                 text_value = text.strip()
                 if not text_value:
-                    container.pop(field_key, None)
+                    if field_key is None:
+                        item.components.pop(id, None)
+                        return
+                    container = data_root_getter()
+                    if isinstance(container, dict):
+                        container.pop(field_key, None)
                     return
                 try:
-                    parsed = int(text_value) if field_type == "int" else float(text_value)
+                    parsed = (
+                        int(text_value) if field_type == "int" else float(text_value)
+                    )
                 except ValueError:
                     return
-                container[field_key] = parsed
+                if field_key is None:
+                    item.components[id] = parsed
+                    return
+                container = data_root_getter()
+                if isinstance(container, dict):
+                    container[field_key] = parsed
 
             input_field.textChanged.connect(on_text_changed)
             layout.addStretch()
@@ -112,14 +127,42 @@ def load_component(
             layout.addWidget(check_box)
 
             def on_state_changed():
-                container = data_root_getter()
-                if container is None or not isinstance(container, dict):
-                    return
                 if field_key is None:
+                    item.components[id] = check_box.isChecked()
                     return
-                container[field_key] = check_box.isChecked()
+                container = data_root_getter()
+                if isinstance(container, dict):
+                    container[field_key] = check_box.isChecked()
 
             check_box.stateChanged.connect(on_state_changed)
+        
+        case {"type": "string", "description": description}:
+            layout.addWidget(QLabel(description + "："))
+            logger.debug("创建字符串输入组件: %s", description)
+            input_field = QLineEdit()
+            if "place_holder_text" in data:
+                input_field.setPlaceholderText(data["place_holder_text"])
+            layout.addWidget(input_field)
+            
+            def on_text_changed(text: str):
+                text_value = text.strip()
+                if not text_value:
+                    if field_key is None:
+                        item.components.pop(id, None)
+                        return
+                    container = data_root_getter()
+                    if isinstance(container, dict):
+                        container.pop(field_key, None)
+                    return
+                if field_key is None:
+                    item.components[id] = text_value
+                    return
+                container = data_root_getter()
+                if isinstance(container, dict):
+                    container[field_key] = text_value
+
+            input_field.textChanged.connect(on_text_changed)
+            layout.addStretch()
 
         case {"type": "list", "description": description, "values": values}:
             group_box = QGroupBox(description)
@@ -261,12 +304,13 @@ def load_component(
             layout.addWidget(combo_box)
 
             def on_simple_enum_changed(text: str):
-                container = data_root_getter()
-                if container is None or not isinstance(container, dict):
-                    return
+                value = values.get(text, text)
                 if field_key is None:
+                    item.components[id] = value
                     return
-                container[field_key] = values.get(text, text)
+                container = data_root_getter()
+                if isinstance(container, dict):
+                    container[field_key] = value
 
             combo_box.currentTextChanged.connect(on_simple_enum_changed)
             layout.addStretch()
@@ -296,7 +340,10 @@ def load_component(
                 # 加载新组件
                 if "components" in selected:
                     new_layout = load_component(
-                        selected["components"], item, id, data_root_getter=data_root_getter
+                        selected["components"],
+                        item,
+                        id,
+                        data_root_getter=data_root_getter,
                     )
                     components_layout.addLayout(new_layout)
 
@@ -344,7 +391,7 @@ def load_component(
 
             def get_existing_payload() -> dict | str | None:
                 if field_key is None:
-                    return data_root_getter() # type: ignore
+                    return data_root_getter()  # type: ignore
                 container = data_root_getter()
                 if isinstance(container, dict):
                     return container.get(field_key)
@@ -359,7 +406,9 @@ def load_component(
                     logger.exception("导入 item_selector 失败")
                     return
 
-                selected = item_selector.choose_item(only_basic=False, parent=button.window())
+                selected = item_selector.choose_item(
+                    only_basic=False, parent=button.window()
+                )
                 if not selected:
                     return
 
@@ -402,7 +451,9 @@ def load_component(
                     if key not in {"name", "description"}
                 }
 
-            def _sanitize_effect_payload(payload: dict | list | None) -> dict | list | None:
+            def _sanitize_effect_payload(
+                payload: dict | list | None,
+            ) -> dict | list | None:
                 if payload is None:
                     return None
                 if isinstance(payload, list):
@@ -415,9 +466,11 @@ def load_component(
                     if isinstance(effects, list):
                         sanitized = dict(payload)
                         sanitized["effects"] = [
-                            _strip_effect_dict(entry)
-                            if isinstance(entry, dict)
-                            else entry
+                            (
+                                _strip_effect_dict(entry)
+                                if isinstance(entry, dict)
+                                else entry
+                            )
                             for entry in effects
                         ]
                         sanitized.pop("name", None)
@@ -472,7 +525,11 @@ def load_component(
                     logger.exception("导入 effect_selector 失败")
                     return
 
-                selected = effect_selector.open_effect_selector(parent=button.window())
+                existing_payload = get_effect_existing_payload()
+                selected = effect_selector.open_effect_selector(
+                    parent=button.window(),
+                    existing=existing_payload,
+                )
                 if selected is None:
                     return
 
@@ -549,8 +606,10 @@ def load_component(
                     logger.exception("导入 enchantment_selector 失败")
                     return
 
+                existing_payload = get_enchantment_existing_payload()
                 selected = enchantment_selector.open_enchantment_selector(
-                    parent=button.window()
+                    parent=button.window(),
+                    existing=existing_payload,
                 )
                 if selected is None:
                     return
@@ -567,12 +626,8 @@ def load_component(
 
             button.clicked.connect(on_select_enchantment)
         
-        case {"type": "sound_event", "description": description}:
-            layout.addWidget(QLabel(description + "："))
-            button = QPushButton("选择声音事件")
-            logger.debug("创建声音事件选择按钮: %s", description)
-            layout.addWidget(button)
-            layout.addStretch()
+        case {"type": "block_filter", "description": description}:
+            pass
 
         case _:
             try:

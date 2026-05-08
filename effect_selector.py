@@ -35,6 +35,40 @@ logger = logging.getLogger(__name__)
 CUSTOM_EFFECTS_DIR = "custom/effects/"
 
 
+def _build_effect_group_from_existing(payload):
+	if payload is None:
+		return None
+	entries = None
+	if isinstance(payload, dict):
+		effects = payload.get("effects")
+		if isinstance(effects, list):
+			entries = effects
+		elif "id" in payload:
+			entries = [payload]
+		else:
+			return None
+	elif isinstance(payload, list):
+		entries = payload
+	else:
+		return None
+
+	nbt_data: dict[str, dict] = {}
+	for entry in entries:
+		if isinstance(entry, dict):
+			item_id = entry.get("id")
+			if not item_id:
+				continue
+			data = dict(entry)
+			data.pop("id", None)
+			nbt_data[item_id] = data
+		elif isinstance(entry, str):
+			nbt_data[entry] = {}
+
+	if not nbt_data:
+		return None
+	return effect.EffectGroup.from_nbt(nbt_data)
+
+
 class CustomTableWidget(QTableWidget):
 	"""自定义表格，用于处理悬停提示和点击事件"""
 
@@ -451,6 +485,60 @@ class EffectWindow(QMainWindow):
 				"加载失败",
 			)
 
+	def load_existing(self, payload):
+		group = _build_effect_group_from_existing(payload)
+		if group is None:
+			return
+
+		self.selected_table.setRowCount(0)
+		self.selected_ids.clear()
+
+		for eff in group.effects:
+			row_pos = self.selected_table.rowCount()
+			self.selected_table.insertRow(row_pos)
+			self.selected_table.setItem(row_pos, 0, QTableWidgetItem(eff.name))
+			self.selected_table.setItem(row_pos, 1, QTableWidgetItem(eff.id))
+
+			amplifier_input = QLineEdit()
+			amplifier_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+			amplifier_input.setPlaceholderText("默认0")
+			amplifier_input.setStyleSheet(
+				"QLineEdit { border: 1px solid #ccc; border-radius: 2px; }"
+			)
+			if eff.amplifier != 0:
+				amplifier_input.setText(str(eff.amplifier))
+			self.selected_table.setCellWidget(row_pos, 2, amplifier_input)
+
+			duration_input = QLineEdit()
+			duration_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+			duration_input.setPlaceholderText("刻，-1无限")
+			duration_input.setStyleSheet(
+				"QLineEdit { border: 1px solid #ccc; border-radius: 2px; }"
+			)
+			if eff.duration != 0:
+				duration_input.setText(str(eff.duration))
+			self.selected_table.setCellWidget(row_pos, 3, duration_input)
+
+			particles_check = QCheckBox()
+			particles_check.setChecked(bool(eff.show_particles))
+			particles_check.setTristate(False)
+			particles_check.setStyleSheet("QCheckBox { margin-left: 18px; }")
+			self.selected_table.setCellWidget(row_pos, 4, particles_check)
+
+			icon_combo = QComboBox()
+			icon_combo.addItems(["默认", "显示", "隐藏"])
+			if eff.show_icon is True:
+				icon_combo.setCurrentIndex(1)
+			elif eff.show_icon is False:
+				icon_combo.setCurrentIndex(2)
+			else:
+				icon_combo.setCurrentIndex(0)
+			self.selected_table.setCellWidget(row_pos, 5, icon_combo)
+
+			self.selected_ids.add(eff.id)
+
+		self.refresh_tables()
+
 	def confirm_group(self):
 		group = self.collect_group()
 		logger.info(
@@ -461,7 +549,7 @@ class EffectWindow(QMainWindow):
 		self.close()
 
 
-def open_effect_selector(parent=None):
+def open_effect_selector(parent=None, existing=None):
 	"""
 	打开状态效果选择器窗口并阻塞直到窗口关闭。
 
@@ -476,6 +564,8 @@ def open_effect_selector(parent=None):
 		app_created = True
 
 	window = EffectWindow(parent=parent)
+	if existing is not None:
+		window.load_existing(existing)
 	if parent is not None:
 		window.setWindowModality(Qt.WindowModality.WindowModal)
 	window.show()

@@ -1,0 +1,32 @@
+{
+    "name": "苹果",
+    "id": "minecraft:apple",
+    "categories": [],
+    "components": {
+        "consumable": {
+            "animation": "drink",
+            "has_consume_particles": false,
+            "sound": {
+                "sound_id": "entity.generic.drink"
+            },
+            "on_consume_effects": [
+                {
+                    "type": "apply_effects",
+                    "effects": [
+                        {
+                            "id": "minecraft:night_vision",
+                            "duration": -1
+                        }
+                    ]
+                },
+                {
+                    "type": "play_sound",
+                    "sound": {
+                        "sound_id": "entity.experience_orb.pickup"
+                    }
+                }
+            ]
+        }
+    },
+    "count": 1
+}

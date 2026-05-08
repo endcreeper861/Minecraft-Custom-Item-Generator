@@ -33,6 +33,63 @@ logger = logging.getLogger(__name__)
 CUSTOM_ENCHANTMENTS_DIR = "custom/enchantments/"
 
 
+def _build_enchantment_group_from_existing(payload):
+    if payload is None:
+        return None
+
+    if isinstance(payload, dict):
+        entries = payload.get("enchantments")
+        if isinstance(entries, list):
+            nbt_data: dict[str, int] = {}
+            for entry in entries:
+                if isinstance(entry, dict):
+                    item_id = entry.get("id")
+                    if not item_id:
+                        continue
+                    try:
+                        level = int(entry.get("level", 1))
+                    except Exception:
+                        level = 1
+                    nbt_data[item_id] = level
+                elif isinstance(entry, str):
+                    nbt_data[entry] = 1
+            if nbt_data:
+                return enchantment.EnchantmentGroup.from_nbt(nbt_data)
+            return None
+
+        nbt_data: dict[str, int] = {}
+        for item_id, level in payload.items():
+            if not item_id:
+                continue
+            try:
+                nbt_data[item_id] = int(level)
+            except Exception:
+                nbt_data[item_id] = 1
+        if not nbt_data:
+            return None
+        return enchantment.EnchantmentGroup.from_nbt(nbt_data)
+
+    if isinstance(payload, list):
+        nbt_data: dict[str, int] = {}
+        for entry in payload:
+            if isinstance(entry, dict):
+                item_id = entry.get("id")
+                if not item_id:
+                    continue
+                try:
+                    level = int(entry.get("level", 1))
+                except Exception:
+                    level = 1
+                nbt_data[item_id] = level
+            elif isinstance(entry, str):
+                nbt_data[entry] = 1
+        if not nbt_data:
+            return None
+        return enchantment.EnchantmentGroup.from_nbt(nbt_data)
+
+    return None
+
+
 class CustomTableWidget(QTableWidget):
     """自定义表格，用于处理悬停提示和点击事件"""
 
@@ -313,9 +370,6 @@ class EnchantmentWindow(QMainWindow):
                 except Exception:
                     level = 1
 
-            if max_level is not None and level > max_level:
-                level = max_level
-
             ench = enchantment.Enchantment(
                 name=name,
                 id=item_id,
@@ -413,6 +467,32 @@ class EnchantmentWindow(QMainWindow):
                 "加载失败",
             )
 
+    def load_existing(self, payload):
+        group = _build_enchantment_group_from_existing(payload)
+        if group is None:
+            return
+
+        self.selected_table.setRowCount(0)
+        self.selected_ids.clear()
+
+        for ench in group.enchantments:
+            row_pos = self.selected_table.rowCount()
+            self.selected_table.insertRow(row_pos)
+            self.selected_table.setItem(row_pos, 0, QTableWidgetItem(ench.name))
+            self.selected_table.setItem(row_pos, 1, QTableWidgetItem(ench.id))
+            self.selected_table.setItem(row_pos, 2, QTableWidgetItem(ench.description))
+
+            level_input = QLineEdit()
+            level_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            level_input.setText(str(ench.level) if ench.level is not None else "")
+            if ench.max_level is not None:
+                level_input.setPlaceholderText(f"最高等级：{ench.max_level}")
+            self.selected_table.setCellWidget(row_pos, 3, level_input)
+
+            self.selected_ids.add(ench.id)
+
+        self.refresh_tables()
+
     def confirm_group(self):
         group = self.collect_group()
         logger.info("确认附魔组，共 %d 个附魔", len(group.enchantments) if hasattr(group, 'enchantments') else 0)
@@ -420,7 +500,7 @@ class EnchantmentWindow(QMainWindow):
         self.close()
 
 
-def open_enchantment_selector(parent=None):
+def open_enchantment_selector(parent=None, existing=None):
     """
     打开附魔选择器窗口并阻塞直到窗口关闭。
 
@@ -435,6 +515,8 @@ def open_enchantment_selector(parent=None):
         app_created = True
 
     window = EnchantmentWindow(parent=parent)
+    if existing is not None:
+        window.load_existing(existing)
     if parent is not None:
         window.setWindowModality(Qt.WindowModality.WindowModal)
     window.show()
