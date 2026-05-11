@@ -90,7 +90,7 @@ class Item:
         """生成物品堆叠字符串"""
         if self.components:
             components_str = ",".join(
-                f"{k}={dumps(v, separators=(',', ':'))}"
+                f"{k}={dumps(v, separators=(',', ':'), ensure_ascii=False)}"
                 for k, v in self.components.items()
             )
             return f"{self.id}[{components_str}]"

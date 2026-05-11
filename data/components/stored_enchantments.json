@@ -1,6 +1,6 @@
 {
-    "id": "enchantments",
-    "description": "物品附魔",
+    "id": "stored_enchantments",
+    "description": "附魔书附魔",
     "components": {
         "type": "enchantment",
         "description": "选择附魔"

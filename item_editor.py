@@ -191,25 +191,25 @@ class ItemEditorDialog(QDialog):
                         comp_group.setVisible(False)
                         comp_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
                         default_value = TOGGLE_DEFAULT_UNSET
-                        if (
-                            isinstance(component_def, dict)
-                            and component_def.get("type") == "bool"
-                        ):
-                            default_value = component_def.get("default", False)
+                        default_factory = None
+                        if isinstance(component_def, dict):
+                            component_type = component_def.get("type")
+                            if component_type == "bool":
+                                default_value = component_def.get("default", False)
+                            elif component_type == "list":
+                                default_factory = list
+                            elif component_type == "dict":
+                                default_factory = dict
                         comp_check_box.stateChanged.connect(
                             self._gen_toggle_component(
-                                comp_check_box, comp_id, comp_group, default_value
+                                comp_check_box,
+                                comp_id,
+                                comp_group,
+                                default_value,
+                                default_factory,
+                                component_def,
                             )
                         )
-
-                        comp_layout = QVBoxLayout(comp_group)
-                        comp_layout.setContentsMargins(10, 0, 10, 10)
-                        comp_layout.setSpacing(10)
-
-                        layout = component.load_component(
-                            component_def, self.current_item, comp_id
-                        )
-                        comp_layout.addLayout(layout)
 
                         self.content_groups.append(comp_group)
 
@@ -249,6 +249,8 @@ class ItemEditorDialog(QDialog):
         comp_id: str,
         group_box: QGroupBox | None = None,
         default_value=TOGGLE_DEFAULT_UNSET,
+        default_factory=None,
+        component_def: dict | None = None,
     ):
         """工厂函数，切换组件启用状态并同步到 Item.components。"""
 
@@ -256,16 +258,36 @@ class ItemEditorDialog(QDialog):
             is_checked = check_box.isChecked()
             if is_checked:
                 if comp_id not in self.current_item.components:
-                    if default_value is TOGGLE_DEFAULT_UNSET:
-                        self.current_item.components[comp_id] = {}
-                    else:
+                    if default_value is not TOGGLE_DEFAULT_UNSET:
                         self.current_item.components[comp_id] = default_value
+                    elif default_factory is not None:
+                        self.current_item.components[comp_id] = default_factory()
+                    else:
+                        self.current_item.components[comp_id] = {}
+                if group_box is not None and component_def is not None:
+                    self._rebuild_component_group(group_box, component_def, comp_id)
             else:
                 self.current_item.components.pop(comp_id, None)
+                if group_box is not None:
+                    layout = group_box.layout()
+                    if layout is not None:
+                        utils.clear_layout(layout)
             if group_box is not None:
                 group_box.setVisible(is_checked)
 
         return toggle
+
+    def _rebuild_component_group(
+        self, group_box: QGroupBox, component_def: dict, comp_id: str
+    ) -> None:
+        layout = group_box.layout()
+        if layout is None:
+            layout = QVBoxLayout(group_box)
+        else:
+            utils.clear_layout(layout)
+        layout.setContentsMargins(10, 0, 10, 10)
+        layout.setSpacing(10)
+        layout.addLayout(component.load_component(component_def, self.current_item, comp_id)) # type: ignore
 
     def _arrange_columns(self):
         """根据窗口宽度把 content_groups 布局为 1/2/3 列。"""

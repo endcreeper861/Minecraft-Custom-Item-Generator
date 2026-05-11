@@ -1,0 +1,9 @@
+{
+    "id": "max_damage",
+    "description": "最大耐久度",
+    "components": {
+        "type": "int",
+        "place_holder_text": "整数，>0",
+        "description": "最大耐久度"
+    }
+}

@@ -1,0 +1,86 @@
+{
+    "id": "death_protection",
+    "description": "不死图腾属性",
+    "components": {
+        "type": "dict",
+        "values": {
+            "death_effects": {
+                "type": "list",
+                "description": "触发此物品后产生的效果列表",
+                "values": {
+                    "type": "enum",
+                    "description": "效果类型",
+                    "values": {
+                        "给予状态效果": {
+                            "id": "apply_effects",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "effects": {
+                                        "type": "effect",
+                                        "description": "要施加的状态效果"
+                                    },
+                                    "probability": {
+                                        "type": "float",
+                                        "description": "效果生效概率（浮点数，0.0~1.0）",
+                                        "place_holder_text": "默认1.0（100%）"
+                                    }
+                                }
+                            }
+                        },
+                        "移除所有状态效果": {
+                            "id": "clear_all_effects"
+                        },
+                        "播放声音": {
+                            "id": "play_sound",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "sound": {
+                                        "type": "dict",
+                                        "values": {
+                                            "sound_id": {
+                                                "type": "string",
+                                                "description": "要播放的声音事件ID"
+                                            },
+                                            "range": {
+                                                "type": "float",
+                                                "description": "声音传播距离（格）",
+                                                "place_holder_text": "默认16倍初始音量"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "移除指定状态效果": {
+                            "id": "remove_effects",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "effects": {
+                                        "type": "effect_filter",
+                                        "description": "要移除的状态效果"
+                                    }
+                                }
+                            }
+                        },
+                        "随机传送": {
+                            "id": "teleport_randomly",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "diameter": {
+                                        "type": "float",
+                                        "description": "随机传送半径（格）",
+                                        "place_holder_text": "默认16格"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

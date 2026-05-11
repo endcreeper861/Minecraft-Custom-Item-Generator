@@ -1,0 +1,9 @@
+{
+    "id": "damage",
+    "description": "损坏值",
+    "components": {
+        "type": "int",
+        "place_holder_text": "整数，>=0",
+        "description": "损坏值"
+    }
+}

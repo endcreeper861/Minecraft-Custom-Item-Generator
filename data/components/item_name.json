@@ -1,0 +1,8 @@
+{
+    "id": "item_name",
+    "description": "修改默认名称",
+    "components": {
+        "type": "text_component",
+        "description": "默认名称"
+    }
+}

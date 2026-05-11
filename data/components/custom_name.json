@@ -1,0 +1,8 @@
+{
+    "id": "custom_name",
+    "description": "自定义名称",
+    "components": {
+        "type": "text_component",
+        "description": "自定义名称"
+    }
+}

@@ -1,6 +1,6 @@
 {
     "id": "food",
-    "description": "食物",
+    "description": "食物属性",
     "components": {
         "type": "dict",
         "values": {

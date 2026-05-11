@@ -1,0 +1,120 @@
+{
+    "id": "attribute_modifiers",
+    "description": "属性修饰符",
+    "components": {
+        "type": "list",
+        "description": "属性修饰符列表",
+        "values": {
+            "type": "dict",
+            "values": {
+                "type": {
+                    "type": "simple_enum",
+                    "values": {
+                        "空气阻力修正系数": "air_drag_modifier",
+                        "护甲值": "armor",
+                        "盔甲韧性": "armor_toughness",
+                        "攻击伤害": "attack_damage",
+                        "击退": "attack_knockback",
+                        "攻击速度": "attack_speed",
+                        "名牌分数距离": "below_name_distance",
+                        "方块破坏速度": "block_break_speed",
+                        "方块交互距离": "block_interaction_range",
+                        "弹性": "bounciness",
+                        "着火时间": "burning_time",
+                        "镜头距离": "camera_distance",
+                        "实体交互距离": "entity_interaction_range",
+                        "爆炸击退抗性": "explosion_knockback_resistance",
+                        "摔落伤害倍数": "fall_damage_multiplier",
+                        "飞行速度": "flying_speed",
+                        "生物跟随距离": "follow_range",
+                        "摩擦力修正系数": "friction_modifier",
+                        "重力": "gravity",
+                        "跳跃力度": "jump_strength",
+                        "击退抗性": "knockback_resistance",
+                        "幸运值": "luck",
+                        "最大伤害吸收值": "max_absorption",
+                        "最大生命值": "max_health",
+                        "挖掘效率": "mining_efficiency",
+                        "移动效率": "movement_efficiency",
+                        "速度": "movement_speed",
+                        "名牌距离": "name_tag_distance",
+                        "额外氧气": "oxygen_bonus",
+                        "安全摔落高度": "safe_fall_distance",
+                        "尺寸": "scale",
+                        "僵尸增援": "spawn_reinforcements",
+                        "潜行速度": "sneaking_speed",
+                        "最大行走高度": "step_height",
+                        "水下挖掘速度": "submerged_mining_speed",
+                        "横扫伤害比率": "sweeping_damage_ratio",
+                        "生物引诱范围": "tempt_range",
+                        "水中移动效率": "water_movement_efficiency",
+                        "路径点传输距离": "waypoint_transmit_range",
+                        "路径点接收距离": "waypoint_receive_range"
+                    },
+                    "description": "属性ID"
+                },
+                "amount": {
+                    "type": "float",
+                    "description": "调整值",
+                    "place_holder_text": "浮点数"
+                },
+                "slot": {
+                    "type": "simple_enum",
+                    "values": {
+                        "任意": "any",
+                        "双手": "hand",
+                        "护甲": "armor",
+                        "主手": "mainhand",
+                        "副手": "offhand",
+                        "靴子": "feet",
+                        "护腿": "legs",
+                        "胸甲": "chest",
+                        "头盔": "head",
+                        "身体": "body",
+                        "鞍": "saddle"
+                    },
+                    "description": "生效槽位"
+                },
+                "operation": {
+                    "type": "simple_enum",
+                    "values": {
+                        "属性基值加上调整值": "add_value",
+                        "对增量操作完成后的值进行加倍": "add_multiplied_base",
+                        "对倍率操作完成后的值进行连续加倍": "add_multiplied_total"
+                    },
+                    "description": "运算方法",
+                    "default": "属性基值加上调整值"
+                },
+                "id": {
+                    "type": "string",
+                    "description": "属性修饰符ID",
+                    "place_holder_text": "如“base_attack_damage”"
+                },
+                "display": {
+                    "type": "enum",
+                    "description": "提示框显示方式",
+                    "values": {
+                        "显示": {
+                            "id": "default"
+                        },
+                        "隐藏": {
+                            "id": "hide"
+                        },
+                        "替换文本": {
+                            "id": "override",
+                            "components": {
+                                "type": "dict",
+                                "values": {
+                                    "value": {
+                                        "type": "text_component",
+                                        "description": "替换文本"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

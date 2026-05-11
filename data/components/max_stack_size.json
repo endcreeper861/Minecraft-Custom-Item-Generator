@@ -1,0 +1,9 @@
+{
+    "id": "max_stack_size",
+    "description": "修改最大堆叠数量",
+    "components": {
+        "type": "int",
+        "description": "最大堆叠数量",
+        "place_holder_text": "0≤值≤99，默认1"
+    }
+}

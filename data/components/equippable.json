@@ -1,0 +1,49 @@
+{
+    "id": "equippable",
+    "description": "可穿戴",
+    "components": {
+        "type": "dict",
+        "values": {
+            "slot": {
+                "type": "simple_enum",
+                "values": {
+                    "主手": "mainhand",
+                    "副手": "offhand",
+                    "靴子": "feet",
+                    "护腿": "legs",
+                    "胸甲": "chest",
+                    "头盔": "head",
+                    "身体": "body",
+                    "鞍": "saddle"
+                },
+                "description": "装备槽位"
+            },
+            "swappable": {
+                "type": "bool",
+                "description": "允许使用（右键）穿戴",
+                "default": true
+            },
+            "dispensable": {
+                "type": "bool",
+                "description": "允许使用发射器穿戴",
+                "default": true
+            },
+            "equip_sound": {
+                "type": "dict",
+                "description": "被穿戴时的声音",
+                "values": {
+                    "sound_id": {
+                        "type": "string",
+                        "description": "要播放的声音事件ID",
+                        "place_holder_text": "默认为item.armor.equip_generic"
+                    },
+                    "range": {
+                        "type": "float",
+                        "description": "声音传播距离（格）",
+                        "place_holder_text": "默认16倍初始音量"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,6 +1,6 @@
 {
     "id": "weapon",
-    "description": "武器",
+    "description": "武器属性",
     "components": {
         "type": "dict",
         "values": {

@@ -22,20 +22,46 @@ import utils
 logger = logging.getLogger(__name__)
 
 DataGetter = Callable[[], dict | list | None]
+ValueSetter = Callable[[object], None]
+ValueClearer = Callable[[], None]
 
 
-def _get_component_root(current_item: item.Item, component_id: str) -> dict | None:
+def _get_component_root(
+    current_item: item.Item, component_id: str, root_type: type | None = None
+) -> dict | list | None:
     data = current_item.components.get(component_id)
-    if isinstance(data, dict):
+    if root_type is list:
+        if not isinstance(data, list):
+            if data is not None:
+                logger.warning(
+                    "组件根类型不匹配: %s 期望 list, 实际 %s",
+                    component_id,
+                    type(data).__name__,
+                )
+            data = []
+            current_item.components[component_id] = data
+        return data
+    if root_type is dict:
+        if not isinstance(data, dict):
+            if data is not None:
+                logger.warning(
+                    "组件根类型不匹配: %s 期望 dict, 实际 %s",
+                    component_id,
+                    type(data).__name__,
+                )
+            data = {}
+            current_item.components[component_id] = data
+        return data
+    if isinstance(data, (dict, list)):
         return data
     return None
 
 
 def _make_component_root_getter(
-    current_item: item.Item, component_id: str
+    current_item: item.Item, component_id: str, root_type: type | None = None
 ) -> DataGetter:
     def getter() -> dict | list | None:
-        return _get_component_root(current_item, component_id)
+        return _get_component_root(current_item, component_id, root_type)
 
     return getter
 
@@ -74,6 +100,8 @@ def load_component(
     id: str,
     data_root_getter: DataGetter | None = None,
     field_key: str | None = None,
+    value_setter: ValueSetter | None = None,
+    value_clearer: ValueClearer | None = None,
 ) -> QHBoxLayout:
     """
     加载数据组件。
@@ -82,7 +110,14 @@ def load_component(
     logger.debug("加载组件: %s", data.get("type"))
 
     if data_root_getter is None:
-        data_root_getter = _make_component_root_getter(item, id)
+        root_type = None
+        if field_key is None:
+            component_type = data.get("type")
+            if component_type == "list":
+                root_type = list
+            elif component_type in {"dict", "enum"}:
+                root_type = dict
+        data_root_getter = _make_component_root_getter(item, id, root_type)
 
     match data:
         case {"type": "int" | "float", "description": description}:
@@ -97,6 +132,9 @@ def load_component(
             def on_text_changed(text: str):
                 text_value = text.strip()
                 if not text_value:
+                    if value_clearer is not None:
+                        value_clearer()
+                        return
                     if field_key is None:
                         item.components.pop(id, None)
                         return
@@ -109,6 +147,9 @@ def load_component(
                         int(text_value) if field_type == "int" else float(text_value)
                     )
                 except ValueError:
+                    return
+                if value_setter is not None:
+                    value_setter(parsed)
                     return
                 if field_key is None:
                     item.components[id] = parsed
@@ -127,6 +168,9 @@ def load_component(
             layout.addWidget(check_box)
 
             def on_state_changed():
+                if value_setter is not None:
+                    value_setter(check_box.isChecked())
+                    return
                 if field_key is None:
                     item.components[id] = check_box.isChecked()
                     return
@@ -136,7 +180,10 @@ def load_component(
 
             check_box.stateChanged.connect(on_state_changed)
         
-        case {"type": "string", "description": description}:
+        case {"type": "string" | "text_component", "description": description}:
+            
+            # TODO: 对于"text_component"类型，未来需要支持文本编辑器，目前先当作普通字符串处理
+            
             layout.addWidget(QLabel(description + "："))
             logger.debug("创建字符串输入组件: %s", description)
             input_field = QLineEdit()
@@ -145,8 +192,10 @@ def load_component(
             layout.addWidget(input_field)
             
             def on_text_changed(text: str):
-                text_value = text.strip()
-                if not text_value:
+                if not text:
+                    if value_clearer is not None:
+                        value_clearer()
+                        return
                     if field_key is None:
                         item.components.pop(id, None)
                         return
@@ -154,14 +203,23 @@ def load_component(
                     if isinstance(container, dict):
                         container.pop(field_key, None)
                     return
+                if value_setter is not None:
+                    value_setter(text)
+                    return
                 if field_key is None:
-                    item.components[id] = text_value
+                    item.components[id] = text
                     return
                 container = data_root_getter()
                 if isinstance(container, dict):
-                    container[field_key] = text_value
+                    container[field_key] = text
 
             input_field.textChanged.connect(on_text_changed)
+            
+            if "default" in data:
+                default_value = str(data["default"])
+                input_field.setText(default_value)
+                on_text_changed(default_value)
+            
             layout.addStretch()
 
         case {"type": "list", "description": description, "values": values}:
@@ -176,19 +234,105 @@ def load_component(
             list_layout.setSpacing(10)
             components_layout.addLayout(list_layout)
 
+            scalar_item_types = {
+                "int",
+                "float",
+                "string",
+                "text_component",
+                "bool",
+                "simple_enum",
+            }
+            value_type = values.get("type")
+            is_scalar_list = value_type in scalar_item_types
+
+            def get_scalar_placeholder():
+                default_value = values.get("default")
+                if default_value is not None:
+                    if value_type == "int":
+                        try:
+                            return int(default_value)
+                        except (TypeError, ValueError):
+                            return 0
+                    if value_type == "float":
+                        try:
+                            return float(default_value)
+                        except (TypeError, ValueError):
+                            return 0.0
+                    if value_type == "bool":
+                        return bool(default_value)
+                    if value_type in {"string", "text_component"}:
+                        return str(default_value)
+                    if value_type == "simple_enum":
+                        options = values.get("values", {})
+                        if isinstance(default_value, str):
+                            return options.get(default_value, default_value)
+                        return default_value
+                if value_type == "int":
+                    return 0
+                if value_type == "float":
+                    return 0.0
+                if value_type == "bool":
+                    return False
+                if value_type == "simple_enum":
+                    options = values.get("values", {})
+                    if isinstance(options, dict) and options:
+                        first_key = next(iter(options.keys()))
+                        return options.get(first_key, first_key)
+                return ""
+
             def add_item():
                 logger.debug("添加列表项到 '%s'", description)
                 data_list = data_root_getter()
                 if data_list is None or not isinstance(data_list, list):
                     return
-                entry: dict = {}
-                data_list.append(entry)
+                entry: dict | None = None
+                if is_scalar_list:
+                    data_list.append(get_scalar_placeholder())
+                else:
+                    entry = {}
+                    data_list.append(entry)
+
                 item_box = QGroupBox()
                 item_layout = QVBoxLayout(item_box)
                 item_layout.setContentsMargins(10, 0, 10, 10)
-                item_layout.addLayout(
-                    load_component(values, item, id, data_root_getter=lambda: entry)
-                )
+
+                def remove_item():
+                    # 从布局中移除该项并安排删除以释放资源
+                    logger.debug("移除列表项 from '%s'", description)
+                    if is_scalar_list:
+                        index = list_layout.indexOf(item_box)
+                        if 0 <= index < len(data_list):
+                            data_list.pop(index)
+                    else:
+                        if entry is not None and entry in data_list:
+                            data_list.remove(entry)
+                    list_layout.removeWidget(item_box)
+                    item_box.setParent(None)
+                    item_box.deleteLater()
+
+                if is_scalar_list:
+                    def set_value(value: object):
+                        index = list_layout.indexOf(item_box)
+                        if index < 0:
+                            return
+                        if index >= len(data_list):
+                            data_list.append(value)
+                            return
+                        data_list[index] = value
+
+                    item_layout.addLayout(
+                        load_component(
+                            values,
+                            item,
+                            id,
+                            value_setter=set_value,
+                            value_clearer=remove_item,
+                        )
+                    )
+                else:
+                    item_layout.addLayout(
+                        load_component(values, item, id, data_root_getter=lambda: entry)
+                    )
                 remove_button_layout = QHBoxLayout()
                 remove_button = QPushButton("删除")
                 remove_button.setFixedWidth(50)
@@ -196,15 +340,6 @@ def load_component(
                 remove_button_layout.addStretch()
                 item_layout.addLayout(remove_button_layout)
                 list_layout.addWidget(item_box)
-
-                def remove_item():
-                    # 从布局中移除该项并安排删除以释放资源
-                    logger.debug("移除列表项 from '%s'", description)
-                    if entry in data_list:
-                        data_list.remove(entry)
-                    list_layout.removeWidget(item_box)
-                    item_box.setParent(None)
-                    item_box.deleteLater()
 
                 remove_button.clicked.connect(remove_item)
 
@@ -305,6 +440,9 @@ def load_component(
 
             def on_simple_enum_changed(text: str):
                 value = values.get(text, text)
+                if value_setter is not None:
+                    value_setter(value)
+                    return
                 if field_key is None:
                     item.components[id] = value
                     return
@@ -313,6 +451,12 @@ def load_component(
                     container[field_key] = value
 
             combo_box.currentTextChanged.connect(on_simple_enum_changed)
+            
+            if "default" in data:
+                default_value = str(data["default"])
+                combo_box.setCurrentText(default_value)
+                on_simple_enum_changed(default_value)
+            
             layout.addStretch()
 
         case {"type": "enum", "description": description, "values": values}:
