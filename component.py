@@ -180,9 +180,11 @@ def load_component(
 
             check_box.stateChanged.connect(on_state_changed)
         
-        case {"type": "string" | "text_component", "description": description}:
+        case {"type": "string" | "text_component" | "block_filter", "description": description}:
             
             # TODO: 对于"text_component"类型，未来需要支持文本编辑器，目前先当作普通字符串处理
+            
+            # TODO: 对于"block_filter"类型，未来需要特殊输入组件
             
             layout.addWidget(QLabel(description + "："))
             logger.debug("创建字符串输入组件: %s", description)
@@ -769,9 +771,6 @@ def load_component(
                 set_enchantment_selected_display(len(payload))
 
             button.clicked.connect(on_select_enchantment)
-        
-        case {"type": "block_filter", "description": description}:
-            pass
 
         case _:
             try:

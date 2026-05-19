@@ -27,7 +27,7 @@
                     "values": {
                         "blocks": {
                             "type": "block_filter",
-                            "description": "适用此规则的方块ID或方块列表"
+                            "description": "适用此规则的方块ID"
                         },
                         "correct_for_drops": {
                             "type": "bool",
