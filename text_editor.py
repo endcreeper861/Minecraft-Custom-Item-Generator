@@ -751,6 +751,7 @@ class TextEditorDialog(QDialog):
 
         基于 QTextFragment 遍历，每个 fragment 映射为一个 TextComponent。
         复用 ``_fragment_has_format()`` 保证与编辑器内判定一致。
+        block 间插入 ``\\n`` 虚拟 fragment 防止换行丢失。
 
         Returns:
             - ``dict``：有内容时返回 ``{"text": "..."}`` 或
@@ -760,9 +761,14 @@ class TextEditorDialog(QDialog):
         doc = self.editor.document()
         extra: list[dict] = []
         has_any_format = False
+        prev_block: QTextBlock | None = None
 
         block: QTextBlock = doc.begin()  # type: ignore[union-attr]
         while block.isValid():
+            # ── 非首个 block 前插入换行标记 ──
+            if prev_block is not None:
+                extra.append({"text": "\n"})
+
             it = block.begin()
             while it != block.end():
                 fragment: QTextFragment = it.fragment()
@@ -792,6 +798,7 @@ class TextEditorDialog(QDialog):
 
                 extra.append(comp)
                 it += 1
+            prev_block = block
             block = block.next()
 
         if not extra:
@@ -802,7 +809,18 @@ class TextEditorDialog(QDialog):
             full_text = "".join(c["text"] for c in extra)
             return {"text": full_text}
 
-        # 有格式 → 列表格式
+        # 单 fragment 有格式 → 简单形式（与 _to_dict_list 一致）
+        if len(extra) == 1:
+            c = extra[0]
+            simple: dict[str, Any] = {"text": c["text"]}
+            for k in _FORMAT_KEYS:
+                if k in c:
+                    simple[k] = True
+            if "color" in c:
+                simple["color"] = c["color"]
+            return simple
+
+        # 多 fragment 有格式 → 列表格式
         return {"text": "", "extra": extra}
 
     def _to_dict_list(self) -> list[dict]:

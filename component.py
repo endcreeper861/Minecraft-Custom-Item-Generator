@@ -80,6 +80,18 @@ class IntFloatWidget(ComponentWidget):
 
         field_type = self.data["type"]
 
+        # 从已有数据还原初始值
+        existing = self.path.read()
+        if existing is not None:
+            try:
+                if field_type == "int":
+                    _ = int(existing)
+                else:
+                    _ = float(existing)
+                input_field.setText(str(existing))
+            except (ValueError, TypeError):
+                pass
+
         def on_text_changed(text: str) -> None:
             text_value = text.strip()
             if not text_value:
@@ -101,9 +113,16 @@ class BoolWidget(ComponentWidget):
 
     def build(self) -> QHBoxLayout:
         layout = QHBoxLayout()
-        default = self._default()
+
+        # 优先从已有数据读取，回退到组件定义的默认值
+        existing = self.path.read()
+        if existing is not None:
+            initial = bool(existing)
+        else:
+            initial = bool(self._default())
+
         check_box = QCheckBox(self._desc())
-        check_box.setChecked(bool(default))
+        check_box.setChecked(initial)
         layout.addWidget(check_box)
 
         def on_state_changed() -> None:
@@ -241,11 +260,15 @@ class StringWidget(ComponentWidget):
 
         input_field.textChanged.connect(on_text_changed)
 
-        default = self._default()
-        if default is not None:
-            default_str = str(default)
-            input_field.setText(default_str)
-            on_text_changed(default_str)
+        # 优先从已有数据读取初始值，回退到组件定义的默认值
+        existing = self.path.read()
+        if existing is not None:
+            input_field.setText(str(existing))
+        else:
+            default = self._default()
+            if default is not None:
+                default_str = str(default)
+                input_field.setText(default_str)
 
         layout.addStretch()
         return layout
@@ -269,11 +292,24 @@ class SimpleEnumWidget(ComponentWidget):
 
         combo_box.currentTextChanged.connect(on_changed)
 
-        default = self._default()
-        if default is not None:
-            default_str = str(default)
-            combo_box.setCurrentText(default_str)
-            on_changed(default_str)
+        # 优先从已有数据读取初始值，回退到组件定义的默认值
+        existing = self.path.read()
+        if existing is not None:
+            # 反向查找：根据值找到显示名
+            found = False
+            for display_text, val in values.items():
+                if val == existing:
+                    combo_box.setCurrentText(display_text)
+                    found = True
+                    break
+            if not found:
+                # 值不在可选项中，仍写入但不改变选择
+                pass
+        else:
+            default = self._default()
+            if default is not None:
+                default_str = str(default)
+                combo_box.setCurrentText(default_str)
 
         layout.addStretch()
         return layout
@@ -358,11 +394,13 @@ class ConditionalEnumWidget(ComponentWidget):
             selected = values[text]
             selected_id = selected.get("id", text)
 
-            # 写入 type 标识
+            # 写入/更新 type 标识
             target = self.path.read_dict()
             if target is not None:
-                target.clear()
-                target["type"] = selected_id
+                # 仅当类型真正改变时才清空旧字段（保留加载还原时的已有数据）
+                if target.get("type") != selected_id:
+                    target.clear()
+                    target["type"] = selected_id
             else:
                 self.path.write({"type": selected_id})
 
@@ -374,7 +412,15 @@ class ConditionalEnumWidget(ComponentWidget):
                 )
                 sub_layout.addLayout(child_layout)
 
-        # 初始化
+        # 初始化：优先从已有数据恢复选中项
+        existing = self.path.read_dict()
+        if existing and "type" in existing:
+            for display_text, option in values.items():
+                if option.get("id") == existing["type"]:
+                    combo_box.setCurrentText(display_text)
+                    break
+
+        # 初始化子组件（此时 combo 已指向正确类型，on_selection_changed 不会清空已有数据）
         on_selection_changed(combo_box.currentText())
         combo_box.currentTextChanged.connect(on_selection_changed)
 
@@ -414,8 +460,54 @@ class ListWidget(ComponentWidget):
         btn_row.addStretch()
         outer.addLayout(btn_row)
 
+        # 回填已有数据
+        self._populate_existing()
+
         layout.addWidget(group_box)
         return layout
+
+    def _populate_existing(self) -> None:
+        """从 DataPath 读取已有列表数据并创建对应 UI 控件。"""
+        data_list = self.path.read_list()
+        if not data_list:
+            return
+
+        if self._is_scalar:
+            for item_value in data_list:
+                self._build_scalar_item_ui(item_value, data_list)
+        else:
+            for entry in data_list:
+                if isinstance(entry, dict):
+                    self._build_dict_item_ui(entry, data_list)
+
+    def _build_scalar_item_ui(self, item_value: Any, data_list: list) -> None:
+        """为已有的标量值创建 UI（不向 data_list 追加，数据已存在）。"""
+        value_def = self._value_def
+
+        item_box = QGroupBox()
+        item_layout = QVBoxLayout(item_box)
+        item_layout.setContentsMargins(10, 0, 10, 10)
+
+        input_widget = self._create_scalar_input(value_def, item_value)
+        item_layout.addWidget(input_widget)  # type: ignore
+
+        self._bind_scalar_value(input_widget, value_def, item_box, data_list)
+        self._add_remove_button(item_layout, item_box, data_list)
+        self._list_layout.addWidget(item_box)
+
+    def _build_dict_item_ui(self, entry: dict, data_list: list) -> None:
+        """为已有的字典项创建 UI（不向 data_list 追加，数据已存在）。"""
+        item_box = QGroupBox()
+        item_layout = QVBoxLayout(item_box)
+        item_layout.setContentsMargins(10, 0, 10, 10)
+
+        entry_path = DataPath.on_dict(entry)
+        item_layout.addLayout(
+            load_component(self._value_def, None, None, path=entry_path)
+        )
+
+        self._add_remove_button(item_layout, item_box, data_list)
+        self._list_layout.addWidget(item_box)
 
     # ── 列表操作 ──
 

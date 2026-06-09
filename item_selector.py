@@ -76,8 +76,7 @@ class ItemWidget(QWidget):
         layout.addWidget(self.name_label)
 
         # 设置样式，使其看起来像可选中的项目
-        self.setStyleSheet(
-            """
+        self.setStyleSheet("""
             ItemWidget {
                 border-radius: 4px;
                 background-color: transparent;
@@ -85,8 +84,7 @@ class ItemWidget(QWidget):
             ItemWidget:hover {
                 background-color: rgba(0, 0, 0, 0.1);
             }
-        """
-        )
+        """)
 
     def load_icon_or_placeholder(self, item: item.Item) -> QPixmap:
         icon_path = "data/textures" + "/" + item.id.removeprefix("minecraft:") + ".png"
@@ -188,8 +186,7 @@ class ItemSelectorDialog(QDialog):
         self.search_box.setPlaceholderText("搜索物品名称或 ID...")
         self.search_box.textChanged.connect(self.refresh_list)
         # 搜索框样式
-        self.search_box.setStyleSheet(
-            """
+        self.search_box.setStyleSheet("""
             QLineEdit {
                 padding: 8px;
                 border-radius: 4px;
@@ -198,8 +195,7 @@ class ItemSelectorDialog(QDialog):
             QLineEdit:focus {
                 border: 2px solid #3498db;
             }
-        """
-        )
+        """)
 
         # --- 底部区域：网格列表 ---
         self.item_list = QListWidget()
@@ -222,7 +218,9 @@ class ItemSelectorDialog(QDialog):
 
     def on_create_new(self):
         item_editor.open_item_editor()
-        self.all_items = item.get_all_items()  # 重新加载物品列表，包含新创建的自定义物品
+        self.all_items = (
+            item.get_all_items(self.only_basic)
+        )  # 重新加载物品列表，包含新创建的自定义物品
         self.refresh_list()
 
     def refresh_list(self):
@@ -291,7 +289,9 @@ def choose_item(only_basic=False, parent=None) -> item.Item | None:
     # 确保应用了系统样式（深色/浅色模式支持）
     # PyQt6 6.2+ 通常会自动跟随系统，但显式设置 Fusion 风格通常兼容性更好
     app.setStyle("Fusion")  # type: ignore
-    dialog = ItemSelectorDialog(item.get_all_items(), only_basic=only_basic, parent=parent)
+    dialog = ItemSelectorDialog(
+        item.get_all_items(only_basic), only_basic=only_basic, parent=parent
+    )
 
     # 居中显示
     dialog.move(app.primaryScreen().geometry().center() - dialog.rect().center())  # type: ignore

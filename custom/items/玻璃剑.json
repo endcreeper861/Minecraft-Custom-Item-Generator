@@ -1,0 +1,41 @@
+{
+    "name": "钻石剑",
+    "id": "minecraft:diamond_sword",
+    "components": {
+        "lore": [
+            {
+                "text": "这是一把奇怪的剑。看起来它的伤害高的吓人……"
+            },
+            {
+                "text": ""
+            },
+            {
+                "text": "该剑只有1点耐久！",
+                "color": "red"
+            }
+        ],
+        "custom_name": {
+            "text": "",
+            "extra": [
+                {
+                    "text": "玻璃剑",
+                    "color": "aqua"
+                }
+            ]
+        },
+        "max_damage": 1,
+        "attribute_modifiers": [
+            {
+                "operation": "add_value",
+                "display": {
+                    "type": "default"
+                },
+                "type": "attack_damage",
+                "amount": 9999.0,
+                "slot": "mainhand",
+                "id": "base_attack_damage"
+            }
+        ]
+    },
+    "count": 1
+}

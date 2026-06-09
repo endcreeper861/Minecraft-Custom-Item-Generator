@@ -107,8 +107,24 @@ class Item:
             "count": self.count,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "Item":
+        """从字典反序列化为 Item 对象。
 
-def get_all_items() -> list[Item]:
+        Args:
+            data: 包含 id, name, count, components, categories 的字典，
+                  categories 可选，缺失时默认为 ["custom"]。
+        """
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            count=data.get("count", 1),
+            components=data.get("components", {}),
+            categories=data.get("categories", ["custom"]),
+        )
+
+
+def get_all_items(only_basic=False) -> list[Item]:
     """读取所有物品数据"""
     item_list = []
 
@@ -124,19 +140,20 @@ def get_all_items() -> list[Item]:
                     count=data.get("count", 1),
                 )
             )
-    
-    for f in Path("custom/items").glob("*.json"):
-        with f.open("r", encoding="utf-8") as file:
-            data = load(file)
-            item_list.append(
-                Item(
-                    name=f.stem,  # 使用文件名作为物品名称
-                    id=data["id"],
-                    categories=["custom"],
-                    components=data.get("components", {}),
-                    count=data.get("count", 1),
+
+    if not only_basic:
+        for f in Path("custom/items").glob("*.json"):
+            with f.open("r", encoding="utf-8") as file:
+                data = load(file)
+                item_list.append(
+                    Item(
+                        name=f.stem,  # 使用文件名作为物品名称
+                        id=data["id"],
+                        categories=["custom"],
+                        components=data.get("components", {}),
+                        count=data.get("count", 1),
+                    )
                 )
-            )
 
     logger.info(f"已加载 {len(item_list)} 个物品数据")
 

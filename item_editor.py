@@ -10,10 +10,11 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPixmap
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QGroupBox,
-                             QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-                             QPlainTextEdit, QPushButton, QScrollArea,
-                             QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QFileDialog,
+                             QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+                             QMessageBox, QPlainTextEdit, QPushButton,
+                             QScrollArea, QSizePolicy, QSpinBox,
+                             QVBoxLayout, QWidget)
 
 import component
 import item
@@ -37,6 +38,7 @@ class ItemEditorDialog(QDialog):
         self.current_item: item.Item = item.Item(
             id="", name="", count=1
         )  # 当前编辑的物品对象
+        self._checkbox_to_comp_id: dict[QCheckBox, str] = {}  # checkbox → component_id 映射
 
         self.setWindowTitle("自定义物品编辑器")
         self.resize(700, 500)
@@ -50,6 +52,11 @@ class ItemEditorDialog(QDialog):
         # === 顶部：保存区域 ===
         save_layout = QHBoxLayout()
         save_layout.setSpacing(8)
+
+        self.load_btn = QPushButton("加载")
+        self.load_btn.clicked.connect(self.on_load)
+        self.load_btn.setMinimumWidth(40)
+        save_layout.addWidget(self.load_btn)
 
         save_layout.addWidget(QLabel("保存名："))
         self.save_name_edit = QLineEdit()
@@ -173,6 +180,7 @@ class ItemEditorDialog(QDialog):
                     comp_id = comp_data["id"]
                     comp_desc = comp_data["description"]
                     comp_check_box = QCheckBox(comp_desc)
+                    self._checkbox_to_comp_id[comp_check_box] = comp_id
                     component_def = comp_data.get("components", {})
                     if component_def != {}:
                         comp_group = QGroupBox(comp_desc)
@@ -453,6 +461,93 @@ class ItemEditorDialog(QDialog):
         except Exception as e:
             logger.error(f"保存失败: {e}")
             QMessageBox.critical(self, "保存失败", f"保存文件时发生错误:\n{e}")
+
+    def on_load(self):
+        """从 JSON 文件加载已保存的自定义物品。"""
+        # 检查是否有未保存的修改
+        if self._has_unsaved_changes():
+            reply = QMessageBox.question(
+                self,
+                "确认加载",
+                "当前编辑器中有未保存的修改，加载将丢弃这些修改。\n是否继续？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        # 打开文件选择对话框
+        start_dir = str(Path("custom/items").resolve())
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择自定义物品 JSON", start_dir, "JSON Files (*.json)"
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            loaded_item = item.Item.from_dict(data)
+            self._apply_loaded_item(loaded_item, file_path)
+            logger.info(f"已加载自定义物品: {file_path}")
+
+        except Exception as e:
+            logger.exception("加载物品失败")
+            QMessageBox.critical(
+                self, "加载失败", f"读取文件时发生错误:\n{e}"
+            )
+
+    def _has_unsaved_changes(self) -> bool:
+        """检查当前是否有未保存的编辑内容。"""
+        return bool(self.current_item.id) or bool(self.current_item.components)
+
+    def _apply_loaded_item(self, loaded_item: item.Item, file_path: str) -> None:
+        """将加载的物品应用到编辑器 UI。
+
+        流程：先取消所有复选框（操作旧 current_item）→ 替换 current_item
+        → 更新基础信息显示 → 勾选加载数据中存在的组件 → toggle 自动重建 UI。
+        """
+        # 1. 取消所有已勾选的复选框（toggle 会操作旧的 current_item，即将被替换）
+        for checkbox in self._checkbox_to_comp_id:
+            if checkbox.isChecked():
+                checkbox.setChecked(False)
+
+        # 2. 替换为加载的物品
+        self.current_item = loaded_item
+
+        # 3. 更新基础物品显示
+        pixmap = self._load_icon_or_placeholder(self.current_item)
+        self.base_icon_label.setPixmap(
+            pixmap.scaled(
+                64,
+                64,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            )
+        )
+        self.base_item_info.setText(
+            f"{self.current_item.name}\n({self.current_item.id})"
+        )
+
+        # 4. 更新数量
+        self.count_spin.setValue(self.current_item.count)
+
+        # 5. 从文件路径提取文件名填入保存名
+        save_name = Path(file_path).stem
+        self.save_name_edit.setText(save_name)
+
+        # 6. 勾选加载数据中存在的组件
+        for comp_id in self.current_item.components:
+            for checkbox, cid in self._checkbox_to_comp_id.items():
+                if cid == comp_id:
+                    checkbox.setChecked(True)
+                    break
+
+        logger.info(
+            f"已还原物品到编辑器: {loaded_item.name} ({loaded_item.id}), "
+            f"组件数={len(loaded_item.components)}"
+        )
 
     def on_generate(self):
         """生成并展示Minecraft标准give命令"""
