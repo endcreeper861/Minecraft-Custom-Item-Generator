@@ -10,28 +10,16 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPixmap
-from PyQt6.QtWidgets import (
-    QApplication,
-    QCheckBox,
-    QDialog,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QPlainTextEdit,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QGroupBox,
+                             QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+                             QPlainTextEdit, QPushButton, QScrollArea,
+                             QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 
 import component
 import item
 import item_selector
 import utils
+from data_path import DataPath
 
 logger = logging.getLogger(__name__)
 
@@ -256,18 +244,19 @@ class ItemEditorDialog(QDialog):
 
         def toggle():
             is_checked = check_box.isChecked()
+            path = DataPath(self.current_item, comp_id)
             if is_checked:
-                if comp_id not in self.current_item.components:
+                if path.read() is None:
                     if default_value is not TOGGLE_DEFAULT_UNSET:
-                        self.current_item.components[comp_id] = default_value
+                        path.write(default_value)
                     elif default_factory is not None:
-                        self.current_item.components[comp_id] = default_factory()
+                        path.write(default_factory())
                     else:
-                        self.current_item.components[comp_id] = {}
+                        path.write({})
                 if group_box is not None and component_def is not None:
                     self._rebuild_component_group(group_box, component_def, comp_id)
             else:
-                self.current_item.components.pop(comp_id, None)
+                path.delete()
                 if group_box is not None:
                     layout = group_box.layout()
                     if layout is not None:
@@ -287,7 +276,7 @@ class ItemEditorDialog(QDialog):
             utils.clear_layout(layout)
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(10)
-        layout.addLayout(component.load_component(component_def, self.current_item, comp_id)) # type: ignore
+        layout.addLayout(component.load_component(component_def, self.current_item, comp_id))  # type: ignore
 
     def _arrange_columns(self):
         """根据窗口宽度把 content_groups 布局为 1/2/3 列。"""

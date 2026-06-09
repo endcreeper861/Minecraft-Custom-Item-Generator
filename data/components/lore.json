@@ -2,11 +2,7 @@
     "id":"lore",
     "description":"自定义描述",
     "components":{
-        "type":"list",
-        "description":"多行描述文本",
-        "values":{
-            "type":"text_component",
-            "description":"描述文本"
-        }
+        "type":"text_component_multiline",
+        "description":"多行描述文本"
     }
 }

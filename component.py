@@ -1,782 +1,1008 @@
 """
-定义、解析数据组件类。
+组件 Widget 构建器 —— 将 JSON 组件定义渲染为 PyQt6 界面。
+
+通过 DataPath 统一数据绑定，彻底消除闭包式 getter/setter/clearer 回调。
+每种组件类型封装为独立的 Widget Builder 类。
 """
 
+from __future__ import annotations
+
 import logging
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QVBoxLayout,
-)
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QGroupBox,
+                             QHBoxLayout, QLabel, QLineEdit, QPushButton,
+                             QVBoxLayout)
 
-import item
 import utils
+from data_path import DataPath
+
+if TYPE_CHECKING:
+    from item import Item
 
 logger = logging.getLogger(__name__)
 
-DataGetter = Callable[[], dict | list | None]
-ValueSetter = Callable[[object], None]
-ValueClearer = Callable[[], None]
+# ── 标量类型集合（列表项内联处理用） ─────────────────────────
+
+_SCALAR_TYPES = {"int", "float", "string", "text_component", "bool", "simple_enum"}
 
 
-def _get_component_root(
-    current_item: item.Item, component_id: str, root_type: type | None = None
-) -> dict | list | None:
-    data = current_item.components.get(component_id)
-    if root_type is list:
-        if not isinstance(data, list):
-            if data is not None:
-                logger.warning(
-                    "组件根类型不匹配: %s 期望 list, 实际 %s",
-                    component_id,
-                    type(data).__name__,
-                )
-            data = []
-            current_item.components[component_id] = data
-        return data
-    if root_type is dict:
-        if not isinstance(data, dict):
-            if data is not None:
-                logger.warning(
-                    "组件根类型不匹配: %s 期望 dict, 实际 %s",
-                    component_id,
-                    type(data).__name__,
-                )
-            data = {}
-            current_item.components[component_id] = data
-        return data
-    if isinstance(data, (dict, list)):
-        return data
-    return None
+# ═══════════════════════════════════════════════════════════════
+#  Base Class
+# ═══════════════════════════════════════════════════════════════
 
 
-def _make_component_root_getter(
-    current_item: item.Item, component_id: str, root_type: type | None = None
-) -> DataGetter:
-    def getter() -> dict | list | None:
-        return _get_component_root(current_item, component_id, root_type)
+class ComponentWidget:
+    """组件 Widget 构建器基类。
 
-    return getter
-
-
-def _make_dict_child_getter(parent_getter: DataGetter, key: str) -> DataGetter:
-    def getter() -> dict | list | None:
-        parent = parent_getter()
-        if parent is None or not isinstance(parent, dict):
-            return None
-        child = parent.get(key)
-        if not isinstance(child, dict):
-            child = {}
-            parent[key] = child
-        return child
-
-    return getter
-
-
-def _make_list_child_getter(parent_getter: DataGetter, key: str) -> DataGetter:
-    def getter() -> dict | list | None:
-        parent = parent_getter()
-        if parent is None or not isinstance(parent, dict):
-            return None
-        child = parent.get(key)
-        if not isinstance(child, list):
-            child = []
-            parent[key] = child
-        return child
-
-    return getter
-
-
-def load_component(
-    data: dict,
-    item: item.Item,
-    id: str,
-    data_root_getter: DataGetter | None = None,
-    field_key: str | None = None,
-    value_setter: ValueSetter | None = None,
-    value_clearer: ValueClearer | None = None,
-) -> QHBoxLayout:
+    Args:
+        data: JSON 组件定义
+        path: 数据绑定路径
     """
-    加载数据组件。
+
+    def __init__(self, data: dict, path: DataPath) -> None:
+        self.data = data
+        self.path = path
+
+    def build(self) -> QHBoxLayout:
+        """构建 UI 并返回布局。子类必须实现。"""
+        raise NotImplementedError
+
+    # ── 便捷方法 ──
+
+    def _desc(self) -> str:
+        return self.data.get("description", "")
+
+    def _default(self):
+        return self.data.get("default")
+
+    def _placeholder(self) -> str:
+        return self.data.get("place_holder_text", "")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Scalar Widgets
+# ═══════════════════════════════════════════════════════════════
+
+
+class IntFloatWidget(ComponentWidget):
+    """int / float 数值输入。"""
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(self._desc() + "："))
+
+        input_field = QLineEdit()
+        placeholder = self._placeholder()
+        if placeholder:
+            input_field.setPlaceholderText(placeholder)
+        layout.addWidget(input_field)
+
+        field_type = self.data["type"]
+
+        def on_text_changed(text: str) -> None:
+            text_value = text.strip()
+            if not text_value:
+                self.path.delete()
+                return
+            try:
+                parsed = int(text_value) if field_type == "int" else float(text_value)
+            except ValueError:
+                return
+            self.path.write(parsed)
+
+        input_field.textChanged.connect(on_text_changed)
+        layout.addStretch()
+        return layout
+
+
+class BoolWidget(ComponentWidget):
+    """bool 复选框。"""
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        default = self._default()
+        check_box = QCheckBox(self._desc())
+        check_box.setChecked(bool(default))
+        layout.addWidget(check_box)
+
+        def on_state_changed() -> None:
+            self.path.write(check_box.isChecked())
+
+        check_box.stateChanged.connect(on_state_changed)
+        layout.addStretch()
+        return layout
+
+
+class TextComponentWidget(ComponentWidget):
+    """text_component 富文本编辑器入口。
+
+    使用 ``TextEditorDialog`` 编辑 Minecraft JSON 文本组件，
+    替代原来的纯文本 QLineEdit。
     """
-    layout = QHBoxLayout()
-    logger.debug("加载组件: %s", data.get("type"))
 
-    if data_root_getter is None:
-        root_type = None
-        if field_key is None:
-            component_type = data.get("type")
-            if component_type == "list":
-                root_type = list
-            elif component_type in {"dict", "enum"}:
-                root_type = dict
-        data_root_getter = _make_component_root_getter(item, id, root_type)
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(self._desc() + "："))
 
-    match data:
-        case {"type": "int" | "float", "description": description}:
-            layout.addWidget(QLabel(description + "："))
-            logger.debug("创建数值输入组件: %s", description)
-            input_field = QLineEdit()
-            if "place_holder_text" in data:
-                input_field.setPlaceholderText(data["place_holder_text"])
-            layout.addWidget(input_field)
-            field_type = data["type"]
+        # 预览文本框（只读，显示当前文本组件的纯文本摘要）
+        self._preview = QLineEdit()
+        self._preview.setReadOnly(True)
+        self._preview.setPlaceholderText("(空)")
+        layout.addWidget(self._preview, stretch=1)
+
+        # 编辑按钮
+        edit_btn = QPushButton("编辑...")
+        edit_btn.clicked.connect(self._open_editor)
+        layout.addWidget(edit_btn)
+
+        # 清除按钮
+        clear_btn = QPushButton("✕")
+        clear_btn.setFixedWidth(28)
+        clear_btn.setToolTip("清除文本组件")
+        clear_btn.clicked.connect(self._clear)
+        layout.addWidget(clear_btn)
+
+        # 加载当前值
+        self._refresh_preview()
+
+        return layout
+
+    def _refresh_preview(self) -> None:
+        """从 DataPath 读取当前值并更新预览。"""
+        current = self.path.read()
+        if current is None:
+            self._preview.setText("")
+            self._preview.setPlaceholderText("(空)")
+            return
+
+        # 生成纯文本摘要
+        from text import TextComponent
+        if isinstance(current, str):
+            preview = current[:60]
+        elif isinstance(current, dict):
+            tc = TextComponent.from_dict(current)
+            preview = self._plain_text_summary(tc)[:60]
+        else:
+            preview = str(current)[:60]
+
+        self._preview.setText(preview)
+
+    @staticmethod
+    def _plain_text_summary(tc) -> str:
+        """递归收集 TextComponent 树中所有纯文本。"""
+        from text import TextComponent
+        parts: list[str] = []
+        if tc.text:
+            parts.append(tc.text)
+        # 收集子组件文本
+        for child in tc.extra:
+            if isinstance(child, TextComponent):
+                parts.append(TextComponentWidget._plain_text_summary(child))
+        # 占位符用类型名显示
+        for attr, label in [
+            ("translate", "翻译"), ("keybind", "按键"),
+            ("selector", "实体"), ("nbt", "NBT"),
+        ]:
+            val = getattr(tc, attr, None)
+            if val:
+                parts.append(f"[{label}:{val}]")
+        if tc.score:
+            s = tc.score
+            parts.append(f"[记分板:{s.get('name','?')}.{s.get('objective','?')}]")
+        if tc.obj_type:
+            parts.append(f"[精灵图:{tc.obj_type}]")
+        return "".join(parts)
+
+    def _open_editor(self) -> None:
+        """打开 TextEditorDialog 编辑文本组件。"""
+        from text_editor import TextEditorDialog
+
+        current = self.path.read()
+        # 规范化输入：DataPath 可能返回 str 或 dict
+        dlg = TextEditorDialog.from_dict(None, current)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            result = dlg.to_dict()
+            # 如果结果为空字符串，删除此组件
+            if result == "" or (isinstance(result, dict) and not result):
+                self.path.delete()
+            else:
+                self.path.write(result)
+            self._refresh_preview()
+
+    def _clear(self) -> None:
+        """清除文本组件。"""
+        self.path.delete()
+        self._preview.setText("")
+        self._preview.setPlaceholderText("(空)")
+
+
+class StringWidget(ComponentWidget):
+    """string / block_filter 文本输入。
+
+    TODO: block_filter 未来需特殊输入组件
+    """
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(self._desc() + "："))
+
+        input_field = QLineEdit()
+        placeholder = self._placeholder()
+        if placeholder:
+            input_field.setPlaceholderText(placeholder)
+        layout.addWidget(input_field)
+
+        def on_text_changed(text: str) -> None:
+            if not text:
+                self.path.delete()
+                return
+            self.path.write(text)
+
+        input_field.textChanged.connect(on_text_changed)
+
+        default = self._default()
+        if default is not None:
+            default_str = str(default)
+            input_field.setText(default_str)
+            on_text_changed(default_str)
+
+        layout.addStretch()
+        return layout
+
+
+class SimpleEnumWidget(ComponentWidget):
+    """simple_enum 下拉框。"""
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(self._desc() + "："))
+
+        values: dict = self.data.get("values", {})
+        combo_box = QComboBox()
+        combo_box.addItems(values.keys())
+        layout.addWidget(combo_box)
+
+        def on_changed(text: str) -> None:
+            value = values.get(text, text)
+            self.path.write(value)
+
+        combo_box.currentTextChanged.connect(on_changed)
+
+        default = self._default()
+        if default is not None:
+            default_str = str(default)
+            combo_box.setCurrentText(default_str)
+            on_changed(default_str)
+
+        layout.addStretch()
+        return layout
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Container Widgets
+# ═══════════════════════════════════════════════════════════════
+
+
+class DictWidget(ComponentWidget):
+    """dict 嵌套字段组。有 description 时包裹 QGroupBox。"""
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        values: dict[str, dict] = self.data.get("values", {})
+        description = self._desc()
+
+        if description:
+            # 有描述 → 包裹在 GroupBox 中
+            group_box = QGroupBox(description)
+            inner = QVBoxLayout(group_box)
+            inner.setContentsMargins(10, 0, 10, 10)
+            inner.setSpacing(10)
+            self._populate_fields(inner, values)
+            layout.addWidget(group_box)
+        else:
+            # 无描述 → 直接放入当前布局
+            inner = QVBoxLayout()
+            self._populate_fields(inner, values)
+            layout.addLayout(inner)
+
+        return layout
+
+    def _populate_fields(
+        self, parent_layout: QVBoxLayout, values: dict[str, dict]
+    ) -> None:
+        """遍历 dict 的各个字段并递归加载。"""
+        for key, field_def in values.items():
+            field_type = field_def.get("type")
+
+            if field_type in {"dict", "enum"}:
+                child_path = self.path.child(key, ensure_type=dict)
+                parent_layout.addLayout(
+                    load_component(field_def, None, None, path=child_path)
+                )
+            elif field_type == "list":
+                child_path = self.path.child(key, ensure_type=list)
+                parent_layout.addLayout(
+                    load_component(field_def, None, None, path=child_path)
+                )
+            else:
+                child_path = self.path.child(key)
+                parent_layout.addLayout(
+                    load_component(field_def, None, None, path=child_path)
+                )
+
+
+class ConditionalEnumWidget(ComponentWidget):
+    """条件枚举 —— 选择改变时动态替换子组件区域。"""
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        group = QVBoxLayout()
+
+        # 下拉框行
+        combo_row = QHBoxLayout()
+        group.addLayout(combo_row)
+        combo_row.addWidget(QLabel(self._desc() + "："))
+
+        values: dict = self.data.get("values", {})
+        combo_box = QComboBox()
+        combo_box.addItems(values.keys())
+        combo_row.addWidget(combo_box)
+        combo_row.addStretch()
+
+        # 子组件区域
+        sub_layout = QVBoxLayout()
+        group.addLayout(sub_layout)
+
+        def on_selection_changed(text: str) -> None:
+            selected = values[text]
+            selected_id = selected.get("id", text)
+
+            # 写入 type 标识
+            target = self.path.read_dict()
+            if target is not None:
+                target.clear()
+                target["type"] = selected_id
+            else:
+                self.path.write({"type": selected_id})
+
+            # 重建子组件
+            utils.clear_layout(sub_layout)
+            if "components" in selected:
+                child_layout = load_component(
+                    selected["components"], None, None, path=self.path
+                )
+                sub_layout.addLayout(child_layout)
+
+        # 初始化
+        on_selection_changed(combo_box.currentText())
+        combo_box.currentTextChanged.connect(on_selection_changed)
+
+        layout.addLayout(group)
+        return layout
+
+
+class ListWidget(ComponentWidget):
+    """动态列表 —— 支持标量列表和字典列表。"""
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        group_box = QGroupBox(self._desc())
+        outer = QVBoxLayout(group_box)
+        outer.setContentsMargins(10, 0, 10, 10)
+        outer.setSpacing(10)
+
+        self._list_layout = QVBoxLayout()
+        self._list_layout.setContentsMargins(0, 0, 0, 0)
+        self._list_layout.setSpacing(10)
+        outer.addLayout(self._list_layout)
+
+        self._value_def: dict = self.data.get("values", {})
+        self._is_scalar = self._value_def.get("type") in _SCALAR_TYPES
+
+        # 控制按钮行
+        btn_row = QHBoxLayout()
+        add_btn = QPushButton("添加")
+        add_btn.setFixedWidth(50)
+        add_btn.clicked.connect(self._add_item)
+        btn_row.addWidget(add_btn)
+
+        clear_btn = QPushButton("清空")
+        clear_btn.setFixedWidth(50)
+        clear_btn.clicked.connect(self._clear_items)
+        btn_row.addWidget(clear_btn)
+        btn_row.addStretch()
+        outer.addLayout(btn_row)
+
+        layout.addWidget(group_box)
+        return layout
+
+    # ── 列表操作 ──
+
+    def _add_item(self) -> None:
+        """添加一项到列表。"""
+        data_list = self.path.read_list()
+        if data_list is None:
+            data_list = []
+            self.path.write(data_list)
+
+        if self._is_scalar:
+            self._add_scalar_item(data_list)
+        else:
+            self._add_dict_item(data_list)
+
+    def _add_scalar_item(self, data_list: list) -> None:
+        """添加一个标量列表项（int/float/string/bool/simple_enum）。"""
+        value_def = self._value_def
+        default = self._scalar_default(value_def)
+        data_list.append(default)
+
+        item_box = QGroupBox()
+        item_layout = QVBoxLayout(item_box)
+        item_layout.setContentsMargins(10, 0, 10, 10)
+
+        # 根据类型创建内联控件
+        input_widget = self._create_scalar_input(value_def, default)
+        item_layout.addWidget(input_widget)  # type: ignore
+
+        # 连接值变更 → 写入列表对应索引
+        self._bind_scalar_value(input_widget, value_def, item_box, data_list)
+
+        # 删除按钮
+        self._add_remove_button(item_layout, item_box, data_list)
+        self._list_layout.addWidget(item_box)
+
+    def _add_dict_item(self, data_list: list) -> None:
+        """添加一个字典列表项。"""
+        entry: dict = {}
+        data_list.append(entry)
+
+        item_box = QGroupBox()
+        item_layout = QVBoxLayout(item_box)
+        item_layout.setContentsMargins(10, 0, 10, 10)
+
+        # 使用 DataPath.on_dict 绑定到该 entry
+        entry_path = DataPath.on_dict(entry)
+        item_layout.addLayout(
+            load_component(self._value_def, None, None, path=entry_path)
+        )
+
+        self._add_remove_button(item_layout, item_box, data_list)
+        self._list_layout.addWidget(item_box)
+
+    def _add_remove_button(
+        self, layout: QVBoxLayout, item_box: QGroupBox, data_list: list
+    ) -> None:
+        """添加删除按钮（标量和字典列表共用，使用索引定位）。"""
+        btn_row = QHBoxLayout()
+        remove_btn = QPushButton("删除")
+        remove_btn.setFixedWidth(50)
+
+        def remove() -> None:
+            idx = self._list_layout.indexOf(item_box)
+            if 0 <= idx < len(data_list):
+                data_list.pop(idx)
+            self._list_layout.removeWidget(item_box)
+            item_box.setParent(None)
+            item_box.deleteLater()
+
+        remove_btn.clicked.connect(remove)
+        btn_row.addWidget(remove_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+    def _clear_items(self) -> None:
+        """清空列表。"""
+        data_list = self.path.read_list()
+        if data_list is not None:
+            data_list.clear()
+
+        while self._list_layout.count():
+            item = self._list_layout.takeAt(0)
+            widget = item.widget()  # type: ignore
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
+    # ── 标量控件内联创建 ──
+
+    def _scalar_default(self, value_def: dict) -> Any:
+        """计算标量列表项的默认值。"""
+        vt = value_def.get("type")
+        default = value_def.get("default")
+
+        if vt == "int":
+            try:
+                return int(default) if default is not None else 0
+            except (TypeError, ValueError):
+                return 0
+        if vt == "float":
+            try:
+                return float(default) if default is not None else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+        if vt == "bool":
+            return bool(default) if default is not None else False
+        if vt in {"string", "text_component"}:
+            return str(default) if default is not None else ""
+        if vt == "simple_enum":
+            options: dict = value_def.get("values", {})
+            if default is not None:
+                return options.get(str(default), default)
+            if options:
+                first_key = next(iter(options))
+                return options[first_key]
+            return ""
+        return ""
+
+    def _create_scalar_input(self, value_def: dict, default: Any):
+        """为标量列表项创建对应的输入控件。"""
+        vt = value_def.get("type")
+        desc = value_def.get("description", "")
+
+        if vt == "bool":
+            widget = QCheckBox(desc)
+            widget.setChecked(bool(default))
+            return widget
+
+        if vt == "simple_enum":
+            options: dict = value_def.get("values", {})
+            widget = QComboBox()
+            widget.addItems(options.keys())
+            # 根据值找到对应的 key
+            default_key = None
+            for k, v in options.items():
+                if v == default:
+                    default_key = k
+                    break
+            if default_key is not None:
+                widget.setCurrentText(default_key)
+            return widget
+
+        # int / float / string / text_component 使用 QLineEdit
+        row = QHBoxLayout()
+        row.addWidget(QLabel(desc + "：" if desc else ""))
+        line_edit = QLineEdit()
+        placeholder = value_def.get("place_holder_text", "")
+        if placeholder:
+            line_edit.setPlaceholderText(placeholder)
+        if default is not None and vt not in ("int", "float"):
+            line_edit.setText(str(default))
+        elif vt in ("int", "float") and default not in (0, 0.0, None):
+            line_edit.setText(str(default))
+        row.addWidget(line_edit)
+        row.addStretch()
+
+        # 将 line_edit 和类型附加到 row 以便后续引用
+        row._input = line_edit  # type: ignore[attr-defined]
+        row._value_type = vt  # type: ignore[attr-defined]
+        return row
+
+    def _bind_scalar_value(
+        self,
+        widget,
+        value_def: dict,
+        item_box: QGroupBox,
+        data_list: list,
+    ) -> None:
+        """绑定标量控件的值变更信号 — 每次操作实时通过 indexOf 定位。"""
+        vt = value_def.get("type")
+
+        def get_index() -> int:
+            return self._list_layout.indexOf(item_box)
+
+        def write_value(value: Any) -> None:
+            idx = get_index()
+            if 0 <= idx < len(data_list):
+                data_list[idx] = value
+
+        def clear_and_remove() -> None:
+            idx = get_index()
+            if 0 <= idx < len(data_list):
+                data_list.pop(idx)
+            self._list_layout.removeWidget(item_box)
+            item_box.setParent(None)
+            item_box.deleteLater()
+
+        if vt == "bool":
+
+            def on_bool_changed():
+                write_value(widget.isChecked())
+
+            widget.stateChanged.connect(on_bool_changed)
+
+        elif vt == "simple_enum":
+            options: dict = value_def.get("values", {})
+
+            def on_enum_changed(text: str):
+                write_value(options.get(text, text))
+
+            widget.currentTextChanged.connect(on_enum_changed)
+
+        else:
+            # int / float / string / text_component
+            line_edit = getattr(widget, "_input", None)
+            if line_edit is None:
+                return
+            w_vt = getattr(widget, "_value_type", "string")
 
             def on_text_changed(text: str):
                 text_value = text.strip()
                 if not text_value:
-                    if value_clearer is not None:
-                        value_clearer()
-                        return
-                    if field_key is None:
-                        item.components.pop(id, None)
-                        return
-                    container = data_root_getter()
-                    if isinstance(container, dict):
-                        container.pop(field_key, None)
+                    clear_and_remove()
                     return
-                try:
-                    parsed = (
-                        int(text_value) if field_type == "int" else float(text_value)
-                    )
-                except ValueError:
-                    return
-                if value_setter is not None:
-                    value_setter(parsed)
-                    return
-                if field_key is None:
-                    item.components[id] = parsed
-                    return
-                container = data_root_getter()
-                if isinstance(container, dict):
-                    container[field_key] = parsed
-
-            input_field.textChanged.connect(on_text_changed)
-            layout.addStretch()
-
-        case {"type": "bool", "description": description, "default": default}:
-            check_box = QCheckBox(description)
-            check_box.setChecked(default)
-            logger.debug("创建布尔组件: %s (default=%s)", description, default)
-            layout.addWidget(check_box)
-
-            def on_state_changed():
-                if value_setter is not None:
-                    value_setter(check_box.isChecked())
-                    return
-                if field_key is None:
-                    item.components[id] = check_box.isChecked()
-                    return
-                container = data_root_getter()
-                if isinstance(container, dict):
-                    container[field_key] = check_box.isChecked()
-
-            check_box.stateChanged.connect(on_state_changed)
-        
-        case {"type": "string" | "text_component" | "block_filter", "description": description}:
-            
-            # TODO: 对于"text_component"类型，未来需要支持文本编辑器，目前先当作普通字符串处理
-            
-            # TODO: 对于"block_filter"类型，未来需要特殊输入组件
-            
-            layout.addWidget(QLabel(description + "："))
-            logger.debug("创建字符串输入组件: %s", description)
-            input_field = QLineEdit()
-            if "place_holder_text" in data:
-                input_field.setPlaceholderText(data["place_holder_text"])
-            layout.addWidget(input_field)
-            
-            def on_text_changed(text: str):
-                if not text:
-                    if value_clearer is not None:
-                        value_clearer()
-                        return
-                    if field_key is None:
-                        item.components.pop(id, None)
-                        return
-                    container = data_root_getter()
-                    if isinstance(container, dict):
-                        container.pop(field_key, None)
-                    return
-                if value_setter is not None:
-                    value_setter(text)
-                    return
-                if field_key is None:
-                    item.components[id] = text
-                    return
-                container = data_root_getter()
-                if isinstance(container, dict):
-                    container[field_key] = text
-
-            input_field.textChanged.connect(on_text_changed)
-            
-            if "default" in data:
-                default_value = str(data["default"])
-                input_field.setText(default_value)
-                on_text_changed(default_value)
-            
-            layout.addStretch()
-
-        case {"type": "list", "description": description, "values": values}:
-            group_box = QGroupBox(description)
-            components_layout = QVBoxLayout(group_box)
-            components_layout.setContentsMargins(10, 0, 10, 10)
-            components_layout.setSpacing(10)
-            logger.debug("创建列表组件: %s", description)
-
-            list_layout = QVBoxLayout()
-            list_layout.setContentsMargins(0, 0, 0, 0)
-            list_layout.setSpacing(10)
-            components_layout.addLayout(list_layout)
-
-            scalar_item_types = {
-                "int",
-                "float",
-                "string",
-                "text_component",
-                "bool",
-                "simple_enum",
-            }
-            value_type = values.get("type")
-            is_scalar_list = value_type in scalar_item_types
-
-            def get_scalar_placeholder():
-                default_value = values.get("default")
-                if default_value is not None:
-                    if value_type == "int":
-                        try:
-                            return int(default_value)
-                        except (TypeError, ValueError):
-                            return 0
-                    if value_type == "float":
-                        try:
-                            return float(default_value)
-                        except (TypeError, ValueError):
-                            return 0.0
-                    if value_type == "bool":
-                        return bool(default_value)
-                    if value_type in {"string", "text_component"}:
-                        return str(default_value)
-                    if value_type == "simple_enum":
-                        options = values.get("values", {})
-                        if isinstance(default_value, str):
-                            return options.get(default_value, default_value)
-                        return default_value
-                if value_type == "int":
-                    return 0
-                if value_type == "float":
-                    return 0.0
-                if value_type == "bool":
-                    return False
-                if value_type == "simple_enum":
-                    options = values.get("values", {})
-                    if isinstance(options, dict) and options:
-                        first_key = next(iter(options.keys()))
-                        return options.get(first_key, first_key)
-                return ""
-
-            def add_item():
-                logger.debug("添加列表项到 '%s'", description)
-                data_list = data_root_getter()
-                if data_list is None or not isinstance(data_list, list):
-                    return
-                entry: dict | None = None
-                if is_scalar_list:
-                    data_list.append(get_scalar_placeholder())
-                else:
-                    entry = {}
-                    data_list.append(entry)
-
-                item_box = QGroupBox()
-                item_layout = QVBoxLayout(item_box)
-                item_layout.setContentsMargins(10, 0, 10, 10)
-
-                def remove_item():
-                    # 从布局中移除该项并安排删除以释放资源
-                    logger.debug("移除列表项 from '%s'", description)
-                    if is_scalar_list:
-                        index = list_layout.indexOf(item_box)
-                        if 0 <= index < len(data_list):
-                            data_list.pop(index)
-                    else:
-                        if entry is not None and entry in data_list:
-                            data_list.remove(entry)
-                    list_layout.removeWidget(item_box)
-                    item_box.setParent(None)
-                    item_box.deleteLater()
-
-                if is_scalar_list:
-                    def set_value(value: object):
-                        index = list_layout.indexOf(item_box)
-                        if index < 0:
-                            return
-                        if index >= len(data_list):
-                            data_list.append(value)
-                            return
-                        data_list[index] = value
-
-                    item_layout.addLayout(
-                        load_component(
-                            values,
-                            item,
-                            id,
-                            value_setter=set_value,
-                            value_clearer=remove_item,
-                        )
-                    )
-                else:
-                    item_layout.addLayout(
-                        load_component(values, item, id, data_root_getter=lambda: entry)
-                    )
-                remove_button_layout = QHBoxLayout()
-                remove_button = QPushButton("删除")
-                remove_button.setFixedWidth(50)
-                remove_button_layout.addWidget(remove_button)
-                remove_button_layout.addStretch()
-                item_layout.addLayout(remove_button_layout)
-                list_layout.addWidget(item_box)
-
-                remove_button.clicked.connect(remove_item)
-
-            def clear_items():
-                # 使用 takeAt() 并对取出的 widget 调用 deleteLater()
-                count = list_layout.count()
-                logger.debug("清空列表 '%s'，项数=%d", description, count)
-                data_list = data_root_getter()
-                if data_list is not None and isinstance(data_list, list):
-                    data_list.clear()
-                while list_layout.count():
-                    item = list_layout.takeAt(0)
-                    widget = item.widget()  # type: ignore
-                    if widget is not None:
-                        widget.setParent(None)
-                        widget.deleteLater()
-
-            control_button_layout = QHBoxLayout()
-            add_button = QPushButton("添加")
-            add_button.setFixedWidth(50)
-            add_button.clicked.connect(add_item)
-            control_button_layout.addWidget(add_button)
-            clear_button = QPushButton("清空")
-            clear_button.setFixedWidth(50)
-            clear_button.clicked.connect(clear_items)
-            control_button_layout.addWidget(clear_button)
-            control_button_layout.addStretch()
-            components_layout.addLayout(control_button_layout)
-
-            layout.addWidget(group_box)
-
-        case {"type": "dict", "description": description, "values": values}:
-            # 如果有description则用group box分组，否则直接放在当前布局
-            group_box = QGroupBox(description)
-            components_layout = QVBoxLayout(group_box)
-            components_layout.setContentsMargins(10, 0, 10, 10)
-            components_layout.setSpacing(10)
-            logger.debug("创建dict组件(分组): %s", description)
-            for key, value in values.items():
-                value_type = value.get("type")
-                if value_type in {"dict", "enum"}:
-                    child_getter = _make_dict_child_getter(data_root_getter, key)
-                    components_layout.addLayout(
-                        load_component(value, item, id, data_root_getter=child_getter)
-                    )
-                elif value_type == "list":
-                    child_getter = _make_list_child_getter(data_root_getter, key)
-                    components_layout.addLayout(
-                        load_component(value, item, id, data_root_getter=child_getter)
-                    )
-                else:
-                    components_layout.addLayout(
-                        load_component(
-                            value,
-                            item,
-                            id,
-                            data_root_getter=data_root_getter,
-                            field_key=key,
-                        )
-                    )
-            layout.addWidget(group_box)
-
-        case {"type": "dict", "values": values}:
-            components_layout = QVBoxLayout()
-            logger.debug("创建dict组件（无描述）: keys=%s", list(values.keys()))
-            for key, value in values.items():
-                value_type = value.get("type")
-                if value_type in {"dict", "enum"}:
-                    child_getter = _make_dict_child_getter(data_root_getter, key)
-                    components_layout.addLayout(
-                        load_component(value, item, id, data_root_getter=child_getter)
-                    )
-                elif value_type == "list":
-                    child_getter = _make_list_child_getter(data_root_getter, key)
-                    components_layout.addLayout(
-                        load_component(value, item, id, data_root_getter=child_getter)
-                    )
-                else:
-                    components_layout.addLayout(
-                        load_component(
-                            value,
-                            item,
-                            id,
-                            data_root_getter=data_root_getter,
-                            field_key=key,
-                        )
-                    )
-            layout.addLayout(components_layout)
-
-        case {"type": "simple_enum", "description": description, "values": values}:
-            layout.addWidget(QLabel(description + "："))
-            combo_box = QComboBox()
-            combo_box.addItems(values.keys())
-            logger.debug(
-                "创建simple_enum组件: %s options=%s", description, list(values.keys())
-            )
-            layout.addWidget(combo_box)
-
-            def on_simple_enum_changed(text: str):
-                value = values.get(text, text)
-                if value_setter is not None:
-                    value_setter(value)
-                    return
-                if field_key is None:
-                    item.components[id] = value
-                    return
-                container = data_root_getter()
-                if isinstance(container, dict):
-                    container[field_key] = value
-
-            combo_box.currentTextChanged.connect(on_simple_enum_changed)
-            
-            if "default" in data:
-                default_value = str(data["default"])
-                combo_box.setCurrentText(default_value)
-                on_simple_enum_changed(default_value)
-            
-            layout.addStretch()
-
-        case {"type": "enum", "description": description, "values": values}:
-            group_layout = QVBoxLayout()
-            combo_box_layout = QHBoxLayout()
-            group_layout.addLayout(combo_box_layout)
-            combo_box_layout.addWidget(QLabel(description + "："))
-            combo_box = QComboBox()
-            combo_box.addItems(values.keys())
-            logger.debug(
-                "创建enum组件: %s options=%s", description, list(values.keys())
-            )
-            components_layout = QVBoxLayout()
-
-            def on_selection_changed(text):
-                logger.debug("enum组件 '%s' 选择改变: %s", description, text)
-                selected = values[text]
-                selected_id = selected.get("id", text)
-                target = data_root_getter()
-                if isinstance(target, dict):
-                    target.clear()
-                    target["type"] = selected_id
-                # 先清空之前的组件
-                utils.clear_layout(components_layout)
-                # 加载新组件
-                if "components" in selected:
-                    new_layout = load_component(
-                        selected["components"],
-                        item,
-                        id,
-                        data_root_getter=data_root_getter,
-                    )
-                    components_layout.addLayout(new_layout)
-
-            on_selection_changed(combo_box.currentText())  # 初始化显示默认选项的组件
-            combo_box.currentTextChanged.connect(on_selection_changed)
-            combo_box_layout.addWidget(combo_box)
-            combo_box_layout.addStretch()
-            group_layout.addLayout(components_layout)
-            layout.addLayout(group_layout)
-
-        case {"type": "item", "description": description}:
-            # 打开物品选择器
-            layout.addWidget(QLabel(description + "："))
-            selected_label = QLabel("未选择")
-            selected_label.setMinimumWidth(200)
-            layout.addWidget(selected_label)
-            button = QPushButton("选择物品")
-            logger.debug("创建物品选择按钮: %s", description)
-            layout.addWidget(button)
-            layout.addStretch()
-
-            def set_selected_display(item_id: str, name: str | None, count: int | None):
-                if count is None:
-                    count_text = ""
-                else:
-                    count_text = f" x{count}"
-                if name:
-                    selected_label.setText(f"{name} ({item_id}){count_text}")
-                else:
-                    selected_label.setText(f"{item_id}{count_text}")
-
-            def set_selected_from_payload(payload: dict | str | None):
-                if not payload:
-                    selected_label.setText("未选择")
-                    return
-                if isinstance(payload, str):
-                    set_selected_display(payload, None, None)
-                    return
-                item_id = payload.get("id")
-                if not item_id:
-                    selected_label.setText("未选择")
-                    return
-                count = payload.get("count")
-                set_selected_display(item_id, None, count)
-
-            def get_existing_payload() -> dict | str | None:
-                if field_key is None:
-                    return data_root_getter()  # type: ignore
-                container = data_root_getter()
-                if isinstance(container, dict):
-                    return container.get(field_key)
-                return None
-
-            set_selected_from_payload(get_existing_payload())
-
-            def on_select_item():
-                try:
-                    import item_selector
-                except Exception:
-                    logger.exception("导入 item_selector 失败")
-                    return
-
-                selected = item_selector.choose_item(
-                    only_basic=False, parent=button.window()
-                )
-                if not selected:
-                    return
-
-                item_id = selected.id
-                count = selected.count if selected.count is not None else 1
-                if count < 0:
-                    count = 0
-                if count > 99:
-                    count = 99
-
-                payload: dict = {"id": item_id, "count": count}
-                if selected.components:
-                    payload["components"] = selected.components
-
-                if field_key is None:
-                    item.components[id] = payload
-                else:
-                    container = data_root_getter()
-                    if isinstance(container, dict):
-                        container[field_key] = payload
-
-                set_selected_display(item_id, selected.name, count)
-
-            button.clicked.connect(on_select_item)
-
-        case {"type": "effect", "description": description}:
-            layout.addWidget(QLabel(description + "："))
-            selected_label = QLabel("未选择")
-            selected_label.setMinimumWidth(200)
-            layout.addWidget(selected_label)
-            button = QPushButton("选择状态效果")
-            logger.debug("创建状态效果选择按钮: %s", description)
-            layout.addWidget(button)
-            layout.addStretch()
-
-            def _strip_effect_dict(effect: dict) -> dict:
-                return {
-                    key: value
-                    for key, value in effect.items()
-                    if key not in {"name", "description"}
-                }
-
-            def _sanitize_effect_payload(
-                payload: dict | list | None,
-            ) -> dict | list | None:
-                if payload is None:
-                    return None
-                if isinstance(payload, list):
-                    return [
-                        _strip_effect_dict(entry) if isinstance(entry, dict) else entry
-                        for entry in payload
-                    ]
-                if isinstance(payload, dict):
-                    effects = payload.get("effects")
-                    if isinstance(effects, list):
-                        sanitized = dict(payload)
-                        sanitized["effects"] = [
-                            (
-                                _strip_effect_dict(entry)
-                                if isinstance(entry, dict)
-                                else entry
-                            )
-                            for entry in effects
-                        ]
-                        sanitized.pop("name", None)
-                        sanitized.pop("description", None)
-                        return sanitized
-                    return _strip_effect_dict(payload)
-                return payload
-
-            def _effect_payload_count(payload: dict | list | None) -> int:
-                if isinstance(payload, list):
-                    return len(payload)
-                if isinstance(payload, dict):
-                    effects = payload.get("effects")
-                    if isinstance(effects, list):
-                        return len(effects)
-                return 0
-
-            def set_effect_selected_display(count: int | None):
-                if count is None or count <= 0:
-                    selected_label.setText("未选择")
-                else:
-                    selected_label.setText(f"已选择 {count} 个状态效果")
-
-            def set_effect_selected_from_payload(payload: dict | list | None):
-                if not payload:
-                    selected_label.setText("未选择")
-                    return
-                if isinstance(payload, list):
-                    set_effect_selected_display(len(payload))
-                    return
-                if isinstance(payload, dict):
-                    effects = payload.get("effects")
-                    if isinstance(effects, list):
-                        set_effect_selected_display(len(effects))
-                        return
-                selected_label.setText("未选择")
-
-            def get_effect_existing_payload() -> dict | list | None:
-                if field_key is None:
-                    return item.components.get(id)
-                container = data_root_getter()
-                if isinstance(container, dict):
-                    return container.get(field_key)
-                return None
-
-            set_effect_selected_from_payload(get_effect_existing_payload())
-
-            def on_select_effect():
-                try:
-                    import effect_selector
-                except Exception:
-                    logger.exception("导入 effect_selector 失败")
-                    return
-
-                existing_payload = get_effect_existing_payload()
-                selected = effect_selector.open_effect_selector(
-                    parent=button.window(),
-                    existing=existing_payload,
-                )
-                if selected is None:
-                    return
-
-                payload = _sanitize_effect_payload(selected.to_dict())
-                if field_key is None:
-                    item.components[id] = payload
-                else:
-                    container = data_root_getter()
-                    if isinstance(container, dict):
-                        container[field_key] = payload
-
-                set_effect_selected_display(_effect_payload_count(payload))
-
-            button.clicked.connect(on_select_effect)
-
-        case {"type": "enchantment", "description": description}:
-            layout.addWidget(QLabel(description + "："))
-            selected_label = QLabel("未选择")
-            selected_label.setMinimumWidth(200)
-            layout.addWidget(selected_label)
-            button = QPushButton("选择附魔")
-            logger.debug("创建附魔选择按钮: %s", description)
-            layout.addWidget(button)
-            layout.addStretch()
-
-            def set_enchantment_selected_display(count: int | None):
-                if count is None or count <= 0:
-                    selected_label.setText("未选择")
-                else:
-                    selected_label.setText(f"已选择 {count} 个附魔")
-
-            def set_enchantment_selected_from_payload(payload: dict | list | None):
-                if not payload:
-                    selected_label.setText("未选择")
-                    return
-                if isinstance(payload, dict):
-                    set_enchantment_selected_display(len(payload))
-                    return
-                if isinstance(payload, list):
-                    set_enchantment_selected_display(len(payload))
-                    return
-                selected_label.setText("未选择")
-
-            def get_enchantment_existing_payload() -> dict | list | None:
-                if field_key is None:
-                    return item.components.get(id)
-                container = data_root_getter()
-                if isinstance(container, dict):
-                    return container.get(field_key)
-                return None
-
-            set_enchantment_selected_from_payload(get_enchantment_existing_payload())
-
-            def build_enchantment_payload(group) -> dict:
-                payload: dict[str, int] = {}
-                enchantments = getattr(group, "enchantments", None)
-                if not enchantments:
-                    return payload
-                for ench in enchantments:
-                    ench_id = getattr(ench, "id", None)
-                    if not ench_id:
-                        continue
+                if w_vt == "int":
                     try:
-                        level = int(getattr(ench, "level", 1))
-                    except Exception:
-                        level = 1
-                    payload[ench_id] = level
-                return payload
-
-            def on_select_enchantment():
-                try:
-                    import enchantment_selector
-                except Exception:
-                    logger.exception("导入 enchantment_selector 失败")
-                    return
-
-                existing_payload = get_enchantment_existing_payload()
-                selected = enchantment_selector.open_enchantment_selector(
-                    parent=button.window(),
-                    existing=existing_payload,
-                )
-                if selected is None:
-                    return
-
-                payload = build_enchantment_payload(selected)
-                if field_key is None:
-                    item.components[id] = payload
+                        parsed = int(text_value)
+                    except ValueError:
+                        return
+                    write_value(parsed)
+                elif w_vt == "float":
+                    try:
+                        parsed = float(text_value)
+                    except ValueError:
+                        return
+                    write_value(parsed)
                 else:
-                    container = data_root_getter()
-                    if isinstance(container, dict):
-                        container[field_key] = payload
+                    write_value(text_value)
 
-                set_enchantment_selected_display(len(payload))
+            line_edit.textChanged.connect(on_text_changed)
 
-            button.clicked.connect(on_select_enchantment)
 
-        case _:
+# ═══════════════════════════════════════════════════════════════
+#  Selector Widgets
+# ═══════════════════════════════════════════════════════════════
+
+
+class SelectorWidget(ComponentWidget):
+    """选择器基类 —— item / effect / enchantment 的公共模式。
+
+    子类只需实现 _button_text / _open_dialog / _build_payload / _format_display。
+    """
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(self._desc() + "："))
+
+        self._status_label = QLabel(self._empty_display())
+        self._status_label.setMinimumWidth(200)
+        layout.addWidget(self._status_label)
+
+        button = QPushButton(self._button_text())
+        button.clicked.connect(self._on_select)
+        layout.addWidget(button)
+        layout.addStretch()
+
+        self._refresh_display()
+        return layout
+
+    # ── 子类覆盖 ──
+
+    def _button_text(self) -> str:
+        raise NotImplementedError
+
+    def _empty_display(self) -> str:
+        return "未选择"
+
+    def _format_display(self, payload) -> str:
+        """根据已存储的 payload 生成显示文字。"""
+        raise NotImplementedError
+
+    def _open_dialog(self, parent, existing: Any) -> Any:
+        """打开选择对话框，返回选中数据；取消返回 None。"""
+        raise NotImplementedError
+
+    def _build_payload(self, selected: Any) -> Any:
+        """将对话框返回的数据转为存储格式。"""
+        raise NotImplementedError
+
+    # ── 内部实现 ──
+
+    def _refresh_display(self) -> None:
+        payload = self.path.read()
+        if payload:
+            self._status_label.setText(self._format_display(payload))
+        else:
+            self._status_label.setText(self._empty_display())
+
+    def _on_select(self) -> None:
+        existing = self.path.read()
+        selected = self._open_dialog(self._status_label.window(), existing)
+        if selected is None:
+            return
+        payload = self._build_payload(selected)
+        self.path.write(payload)
+        self._refresh_display()
+
+
+class ItemSelectorWidget(SelectorWidget):
+    """物品选择器。"""
+
+    def _button_text(self) -> str:
+        return "选择物品"
+
+    def _format_display(self, payload) -> str:
+        if isinstance(payload, str):
+            return payload
+        item_id = payload.get("id", "?")
+        name = payload.get("name", item_id)
+        count = payload.get("count")
+        if count is None:
+            return f"{name} ({item_id})"
+        return f"{name} ({item_id}) x{count}"
+
+    def _open_dialog(self, parent, existing: Any):
+        try:
+            import item_selector
+        except Exception:
+            logger.exception("导入 item_selector 失败")
+            return None
+        return item_selector.choose_item(only_basic=False, parent=parent)
+
+    def _build_payload(self, selected: Any) -> dict:
+        from item import Item
+
+        if isinstance(selected, Item):
+            item_id = selected.id
+            count = selected.count if selected.count is not None else 1
+            count = max(0, min(99, count))
+            payload: dict = {"id": item_id, "count": count}
+            if selected.components:
+                payload["components"] = selected.components
+            return payload
+        return selected if isinstance(selected, dict) else {"id": str(selected)}
+
+
+class EffectSelectorWidget(SelectorWidget):
+    """状态效果选择器。"""
+
+    def _button_text(self) -> str:
+        return "选择状态效果"
+
+    def _format_display(self, payload) -> str:
+        count = self._count_effects(payload)
+        if count <= 0:
+            return "未选择"
+        return f"已选择 {count} 个状态效果"
+
+    @staticmethod
+    def _count_effects(payload) -> int:
+        if isinstance(payload, list):
+            return len(payload)
+        if isinstance(payload, dict):
+            effects = payload.get("effects")
+            if isinstance(effects, list):
+                return len(effects)
+            if "id" in payload:
+                return 1
+        return 0
+
+    @staticmethod
+    def _strip_meta(effect: dict) -> dict:
+        """移除 name/description 等仅供 UI 使用的字段。"""
+        return {k: v for k, v in effect.items() if k not in {"name", "description"}}
+
+    @classmethod
+    def _sanitize(cls, payload) -> Any:
+        if payload is None:
+            return None
+        if isinstance(payload, list):
+            return [cls._strip_meta(e) if isinstance(e, dict) else e for e in payload]
+        if isinstance(payload, dict):
+            effects = payload.get("effects")
+            if isinstance(effects, list):
+                sanitized = dict(payload)
+                sanitized["effects"] = [
+                    cls._strip_meta(e) if isinstance(e, dict) else e for e in effects
+                ]
+                sanitized.pop("name", None)
+                sanitized.pop("description", None)
+                return sanitized
+            return cls._strip_meta(payload)
+        return payload
+
+    def _open_dialog(self, parent, existing: Any):
+        try:
+            import effect_selector
+        except Exception:
+            logger.exception("导入 effect_selector 失败")
+            return None
+        return effect_selector.open_effect_selector(parent=parent, existing=existing)
+
+    def _build_payload(self, selected: Any) -> Any:
+        if hasattr(selected, "to_dict"):
+            return self._sanitize(selected.to_dict())
+        return selected
+
+
+class EnchantmentSelectorWidget(SelectorWidget):
+    """附魔选择器。"""
+
+    def _button_text(self) -> str:
+        return "选择附魔"
+
+    def _format_display(self, payload) -> str:
+        if isinstance(payload, dict):
+            count = len(payload)
+        elif isinstance(payload, list):
+            count = len(payload)
+        else:
+            count = 0
+        if count <= 0:
+            return "未选择"
+        return f"已选择 {count} 个附魔"
+
+    def _open_dialog(self, parent, existing: Any):
+        try:
+            import enchantment_selector
+        except Exception:
+            logger.exception("导入 enchantment_selector 失败")
+            return None
+        return enchantment_selector.open_enchantment_selector(
+            parent=parent, existing=existing
+        )
+
+    def _build_payload(self, selected: Any) -> dict:
+        """将选中的附魔组转为 {id: level} 映射。"""
+        payload: dict[str, int] = {}
+        enchantments = getattr(selected, "enchantments", None)
+        if not enchantments:
+            return payload
+        for ench in enchantments:
+            ench_id = getattr(ench, "id", None)
+            if not ench_id:
+                continue
             try:
-                t = data.get("type")
-            except Exception:
-                t = str(data)
-            logger.warning("未知或格式错误的数据组件类型：%s", t)
+                level = int(getattr(ench, "level", 1))
+            except (TypeError, ValueError):
+                level = 1
+            payload[ench_id] = level
+        return payload
 
+
+# ═══════════════════════════════════════════════════════════════
+#  TextComponentMultilineWidget — 多行文本组件编辑器
+# ═══════════════════════════════════════════════════════════════
+
+
+class TextComponentMultilineWidget(ComponentWidget):
+    """多行文本组件编辑器入口（用于 lore 等多行场景）。
+
+    使用 ``TextEditorDialog(multiline=True)`` 编辑多行文本，
+    每行作为一个独立的文本组件。存储/读取 ``list[dict]``。
+    """
+
+    def build(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(self._desc() + "："))
+
+        # 预览文本框（只读，显示行数或首行摘要）
+        self._preview = QLineEdit()
+        self._preview.setReadOnly(True)
+        self._preview.setPlaceholderText("(空)")
+        layout.addWidget(self._preview, stretch=1)
+
+        edit_btn = QPushButton("编辑...")
+        edit_btn.clicked.connect(self._open_editor)
+        layout.addWidget(edit_btn)
+
+        clear_btn = QPushButton("✕")
+        clear_btn.setFixedWidth(28)
+        clear_btn.setToolTip("清除文本组件")
+        clear_btn.clicked.connect(self._clear)
+        layout.addWidget(clear_btn)
+
+        self._refresh_preview()
+        return layout
+
+    def _refresh_preview(self) -> None:
+        """从 DataPath 读取当前值并更新预览。"""
+        current = self.path.read()
+        if current is None or (isinstance(current, list) and not current):
+            self._preview.setText("")
+            self._preview.setPlaceholderText("(空)")
+            return
+
+        if isinstance(current, list):
+            if len(current) == 1:
+                summary = self._plain_text_summary(current[0])[:60]
+            else:
+                summary = f"{len(current)} 行"
+            self._preview.setText(summary)
+        else:
+            self._preview.setText(str(current)[:60])
+
+    @staticmethod
+    def _plain_text_summary(comp) -> str:
+        """提取单个组件的纯文本摘要。"""
+        if isinstance(comp, str):
+            return comp
+        if isinstance(comp, dict):
+            # 复用 TextComponentWidget 的逻辑
+            from text import TextComponent
+            try:
+                tc = TextComponent.from_dict(comp)
+                return TextComponentWidget._plain_text_summary(tc)
+            except Exception:
+                return comp.get("text", "")[:60]
+        return str(comp)[:60]
+
+    def _open_editor(self) -> None:
+        """打开 TextEditorDialog（多行模式）编辑文本组件列表。"""
+        from text_editor import TextEditorDialog
+
+        current = self.path.read()
+        dlg = TextEditorDialog.from_dict(None, current, multiline=True)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            result = dlg.to_dict()
+            if not result or (isinstance(result, list) and len(result) == 0):
+                self.path.delete()
+            else:
+                self.path.write(result)
+            self._refresh_preview()
+
+    def _clear(self) -> None:
+        """清除文本组件。"""
+        self.path.delete()
+        self._preview.setText("")
+        self._preview.setPlaceholderText("(空)")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Dispatcher
+# ═══════════════════════════════════════════════════════════════
+
+_TYPE_MAP: dict[str, type[ComponentWidget]] = {
+    "int": IntFloatWidget,
+    "float": IntFloatWidget,
+    "bool": BoolWidget,
+    "string": StringWidget,
+    "text_component": TextComponentWidget,
+    "text_component_multiline": TextComponentMultilineWidget,
+    "block_filter": StringWidget,
+    "simple_enum": SimpleEnumWidget,
+    "enum": ConditionalEnumWidget,
+    "dict": DictWidget,
+    "list": ListWidget,
+    "item": ItemSelectorWidget,
+    "effect": EffectSelectorWidget,
+    "enchantment": EnchantmentSelectorWidget,
+}
+
+
+def load_component(
+    data: dict,
+    item_obj: Item | None,
+    component_id: str | None,
+    path: DataPath | None = None,
+) -> QHBoxLayout:
+    """根据 JSON 组件定义构建 UI 布局。
+
+    Args:
+        data: JSON 组件定义
+        item_obj: 目标 Item（path 为 None 时需要）
+        component_id: 数据组件 ID（path 为 None 时需要）
+        path: 数据绑定路径；为 None 时自动从 item_obj + component_id 创建
+
+    Returns:
+        构建好的水平布局
+    """
+    if path is None:
+        if item_obj is None or component_id is None:
+            logger.warning("load_component: item_obj 和 component_id 不能为 None")
+            return QHBoxLayout()
+        path = DataPath(item_obj, component_id)
+
+    comp_type = data.get("type")
+    widget_cls = _TYPE_MAP.get(comp_type)  # type: ignore
+
+    if widget_cls is None:
+        logger.warning("未知组件类型: %s", comp_type)
+        return QHBoxLayout()
+
+    builder = widget_cls(data, path)
+    layout = builder.build()
+    # 关键：将 builder 挂载到 layout 上，防止 Python GC 回收 builder 实例
+    # PyQt6 中 bound method 信号连接不会阻止 Python 对象被 GC
+    layout._cw_builder = builder  # type: ignore[attr-defined]
     return layout

@@ -13,7 +13,7 @@
 - [x] 物品数据结构
 - [x] 物品选择窗口
 - [x] 自定义物品编辑器窗口
-- [ ] 支持更多的物品堆叠组件
+- [x] 支持更多的物品堆叠组件
 
 #### 2. 附魔数据结构与编辑
 
@@ -22,8 +22,8 @@
 
 #### 3. 状态效果数据结构与编辑
 
-- [ ] 状态效果和状态效果组数据结构
-- [ ] 状态效果选择器窗口
+- [x] 状态效果和状态效果组数据结构
+- [x] 状态效果选择器窗口
 
 #### 4. JSON文本编辑器
 
@@ -195,10 +195,412 @@ classDiagram
 |`dict`|对象字典|由`values`决定的控件|`values`|
 |`simple_enum`|简单枚举类型|下拉框|`values`|
 |`enum`|复杂枚举类型|下拉框及由`values`决定的其他控件|`values`|
+|`text_component`|单行 JSON 文本组件|富文本编辑器（支持 B/I/U/S/O 和 16 种预设颜色）||
+|`text_component_multiline`|多行 JSON 文本组件列表|多行富文本编辑器（每行一个组件）|用于 `lore` 等多行场景|
 |`item`|物品|物品选择器||
 |`enchantment`|附魔|附魔组选择器||
 |`sound_event`|声音事件|声音选择器||
-|`json_text`|JSON文本|JSON文本编辑器||
+|`effect`|状态效果|效果选择器||
+
+> **提示**：`enum`、`list` 等复杂类型以及 `item`、`enchantment`、`effect` 等特殊选择器类型的详细格式说明，请参见下方「[数据格式规范](#组件高级类型详解)」章节。
+
+## 数据格式规范
+
+本章节详细说明程序中各类 JSON 数据文件的格式规范，包括物品、附魔、状态效果及其组合数据结构。
+
+### 物品 (Item)
+
+物品数据存储在 `data/items/` 目录下的 JSON 文件中。每个文件是一个物品对象，包含以下字段：
+
+|字段名|类型|必填|说明|
+|---|---|---|---|
+|`name`|`string`|√|物品名称，用于界面显示|
+|`id`|`string`|√|物品 ID，Minecraft 内部标识（如 `minecraft:diamond_sword`）|
+|`categories`|`string[]`|√|物品分类标签列表，详见[物品类别](#物品类别)|
+|`components`|`object`||物品堆叠组件，键为组件 ID，值为组件数据。默认为空对象 `{}`|
+|`count`|`int`||物品数量，默认为 `1`|
+
+**示例**（`data/items/diamond_sword.json`）：
+
+```json
+{
+    "name": "钻石剑",
+    "id": "minecraft:diamond_sword",
+    "categories": ["combat"]
+}
+```
+
+**示例**（`data/items/apple.json`）：
+
+```json
+{
+    "name": "苹果",
+    "id": "minecraft:apple",
+    "categories": ["food"]
+}
+```
+
+### 自定义物品
+
+用户在物品编辑器中创建的自定义物品保存在 `custom/items/` 目录中。文件名（不含 `.json` 扩展名）即为物品名称。
+
+自定义物品的 JSON 格式与基础物品相同，但有以下区别：
+
+- `categories` 固定为 `["custom"]`
+- 文件名被视为物品的 `name`
+- 通常会包含 `components` 字段来存储用户编辑的组件数据
+
+**示例**（`custom/items/我的自定义剑.json`）：
+
+```json
+{
+    "name": "我的自定义剑",
+    "id": "minecraft:diamond_sword",
+    "categories": ["custom"],
+    "components": {
+        "enchantments": {
+            "minecraft:sharpness": 5
+        },
+        "custom_name": "§6传奇之剑"
+    },
+    "count": 1
+}
+```
+
+### 物品类别
+
+物品的 `categories` 字段使用以下类别标签进行分类：
+
+|标签|说明|
+|---|---|
+|`custom`|自定义物品|
+|`building`|建筑方块|
+|`dyed`|染色方块|
+|`natural`|自然方块|
+|`functional`|功能方块|
+|`redstone`|红石方块|
+|`tool`|工具与实用物品|
+|`combat`|战斗用品|
+|`food`|食物与饮品|
+|`material`|原材料|
+|`spawn_egg`|刷怪蛋|
+|`admin`|管理员用品|
+
+### 附魔 (Enchantment)
+
+附魔数据存储在 `data/enchantments/` 目录下的 JSON 文件中。每个文件对应一个附魔，包含以下字段：
+
+|字段名|类型|必填|说明|
+|---|---|---|---|
+|`name`|`string`|√|附魔名称，用于界面显示|
+|`id`|`string`|√|附魔 ID（如 `minecraft:sharpness`）|
+|`max_level`|`int`||最大等级。无此字段表示无等级上限（如 `infinity`）|
+|`description`|`string`||附魔描述文本|
+
+**示例**（`data/enchantments/sharpness.json`）：
+
+```json
+{
+    "name": "锋利",
+    "id": "minecraft:sharpness",
+    "max_level": 5,
+    "description": "增加近战攻击伤害"
+}
+```
+
+**示例**（`data/enchantments/fortune.json`）：
+
+```json
+{
+    "name": "时运",
+    "id": "minecraft:fortune",
+    "max_level": 3,
+    "description": "增加方块掉落物的数量或概率"
+}
+```
+
+### 附魔组 (EnchantmentGroup)
+
+附魔组是多个附魔及其等级的组合，以 JSON 数组形式存储。在附魔数据的基础上，每个附魔多一个 `level` 字段：
+
+|额外字段|类型|说明|
+|---|---|---|
+|`level`|`int`|附魔等级，取值范围 `1` ~ `max_level`。默认为 `1`|
+
+**预设保存格式**（`custom/enchantments/*.json`）：
+
+保存为附魔对象数组，每个附魔包含完整的名称、ID、描述、等级等信息：
+
+```json
+[
+    {
+        "name": "时运",
+        "id": "minecraft:fortune",
+        "max_level": 3,
+        "description": "增加方块掉落物的数量或概率",
+        "level": 3
+    },
+    {
+        "name": "效率",
+        "id": "minecraft:efficiency",
+        "max_level": 5,
+        "description": "加快破坏方块的速度",
+        "level": 5
+    }
+]
+```
+
+> **注意**：附魔组作为物品堆叠组件（如 `enchantments`、`stored_enchantments`）的最终输出值时，格式为 `{"<附魔ID>": <等级>, ...}` 的字典，而非数组。这是因为 Minecraft 命令中的附魔数据采用键值对格式。例如：`{"minecraft:sharpness": 5, "minecraft:unbreaking": 3}`。
+
+### 状态效果 (Effect)
+
+状态效果数据存储在 `data/effects/` 目录下的 JSON 文件中。每个文件对应一个状态效果，包含以下字段：
+
+|字段名|类型|必填|说明|
+|---|---|---|---|
+|`name`|`string`|√|效果名称，用于界面显示|
+|`id`|`string`|√|效果 ID（如 `minecraft:speed`）|
+|`description`|`string`||效果描述文本|
+|`amplifier`|`int`||效果倍率。默认为 `0`。Minecraft 中**等级 = 倍率 + 1**，如力量 II 的倍率为 `1`|
+|`duration`|`int`||持续时间（单位：刻）。`0` 代表 1 刻，`-1` 代表无限时间。默认为 `0`|
+|`show_particles`|`bool`||是否显示效果粒子。默认为 `true`|
+|`show_icon`|`bool`||是否在状态栏显示效果图标。默认为 `null`（跟随 `show_particles`）|
+
+**示例**（`data/effects/speed.json`）：
+
+```json
+{
+    "name": "迅捷",
+    "id": "minecraft:speed",
+    "description": "增加移动速度"
+}
+```
+
+**示例**（`data/effects/strength.json`）：
+
+```json
+{
+    "name": "力量",
+    "id": "minecraft:strength",
+    "description": "增加近战攻击伤害"
+}
+```
+
+### 状态效果组 (EffectGroup)
+
+状态效果组是多个状态效果及其参数组合，以 JSON 数组形式存储。在状态效果数据的基础上，每个效果可额外指定以下运行时参数：
+
+|额外字段|类型|说明|
+|---|---|---|
+|`amplifier`|`int`|效果倍率（等级 = 倍率 + 1）|
+|`duration`|`int`|持续时间（刻），`-1` 为无限|
+|`show_particles`|`bool`|是否显示粒子|
+|`show_icon`|`bool`|是否显示图标|
+
+**预设保存格式**（`custom/effects/*.json`）：
+
+```json
+[
+    {
+        "name": "夜视",
+        "id": "minecraft:night_vision",
+        "description": "调亮视野",
+        "amplifier": 0
+    },
+    {
+        "name": "力量",
+        "id": "minecraft:strength",
+        "description": "增加近战攻击伤害",
+        "amplifier": 1
+    }
+]
+```
+
+> **说明**：`to_dict()` 方法在序列化时会省略取默认值的字段（`amplifier=0`、`duration=0` 等），以保持输出简洁。
+>
+> **注意**：状态效果组作为物品堆叠组件（如 `consumable` 的 `on_consume_effects`、`death_protection` 的 `death_effects`）的输出值时，格式取决于组件定义：
+>
+> - 作为 `apply_effects` 子类型时，输出 `{"effects": [...效果对象数组...], "probability": 1.0}`
+> - 直接作为效果选择器时，输出效果对象数组 `[{...}, {...}]`
+
+### 组件高级类型详解
+
+以下对[组件字段类型](#组件字段类型)中较为复杂的类型进行详细说明。
+
+#### `enum`（复杂枚举类型）
+
+`enum` 类型与 `simple_enum` 类似，都以下拉框选择为基础。区别在于 `enum` 的每个选项可以携带额外的子字段——选中不同选项时，界面会动态显示不同的子编辑控件。
+
+**格式**：
+
+```json
+{
+    "type": "enum",
+    "description": "字段描述",
+    "values": {
+        "<选项显示名>": {
+            "id": "<选项实际值>",
+            "components": { ... }   // 可选，选中此选项后展示的子字段
+        },
+        ...
+    }
+}
+```
+
+每个选项的 `id` 会被写入到数据的 `type` 键中。若选项包含 `components`，则选中该选项后会加载对应的子编辑控件。
+
+**示例**（取自 `consumable.json` 中 `on_consume_effects` 的简化片段）：
+
+```json
+{
+    "type": "enum",
+    "description": "效果类型",
+    "values": {
+        "给予状态效果": {
+            "id": "apply_effects",
+            "components": {
+                "type": "dict",
+                "values": {
+                    "effects": {
+                        "type": "effect",
+                        "description": "要施加的状态效果"
+                    },
+                    "probability": {
+                        "type": "float",
+                        "description": "效果生效概率（0.0~1.0）",
+                        "place_holder_text": "默认1.0（100%）"
+                    }
+                }
+            }
+        },
+        "移除所有状态效果": {
+            "id": "clear_all_effects"
+        },
+        "播放声音": {
+            "id": "play_sound",
+            "components": { ... }
+        }
+    }
+}
+```
+
+对应的输出 JSON 格式为：
+
+```json
+{
+    "type": "apply_effects",
+    "effects": [...],
+    "probability": 1.0
+}
+```
+
+#### `list`（列表类型）
+
+`list` 类型表示一个可动态增删的对象列表。列表中的每个元素可以是标量值或字典对象，取决于 `values` 中指定的子类型。
+
+**格式**：
+
+```json
+{
+    "type": "list",
+    "description": "列表描述",
+    "values": {
+        "type": "<元素类型>",
+        ...                  // 元素类型的其他属性
+    }
+}
+```
+
+**标量列表** — 当 `values.type` 为 `int`、`float`、`string`、`text_component`、`bool` 或 `simple_enum` 时，列表直接存储值：
+
+示例（取自 `attribute_modifiers.json` 的简化片段）：
+
+**多行文本类型** — `text_component_multiline` 直接表示一个文本组件列表，每行一个组件，
+不再需要嵌套 `list` + `text_component`。示例（`lore.json`）：
+
+```json
+{
+    "id": "lore",
+    "description": "自定义描述",
+    "components": {
+        "type": "text_component_multiline",
+        "description": "多行描述文本"
+    }
+}
+```
+
+对应输出 JSON：
+
+```json
+[
+    {"text": "", "extra": [{"text": "第一行", "bold": true}]},
+    {"text": "第二行"}
+]
+```
+
+**字典列表** — 当 `values.type` 为 `dict` 或 `enum` 时，列表存储对象：
+
+示例（取自 `attribute_modifiers.json` 的简化片段）：
+
+```json
+{
+    "type": "list",
+    "description": "属性修饰符列表",
+    "values": {
+        "type": "dict",
+        "values": {
+            "type": { "type": "simple_enum", ... },
+            "amount": { "type": "float", ... },
+            "slot": { "type": "simple_enum", ... }
+        }
+    }
+}
+```
+
+对应输出 JSON：
+
+```json
+[
+    {
+        "type": "attack_damage",
+        "amount": 5.0,
+        "slot": "mainhand",
+        "operation": "add_value",
+        "id": "base_attack_damage"
+    }
+]
+```
+
+#### 特殊选择器类型
+
+以下类型在编辑时会打开专用的选择器窗口，产生的值有其固定格式：
+
+|类型|选择器窗口|输出 JSON 格式|
+|---|---|---|
+|`item`|物品选择器|`{"id": "<物品ID>", "count": <数量>, "components": {...}}` 或纯字符串 `"<物品ID>"`|
+|`enchantment`|附魔组选择器|`{"<附魔ID>": <等级>, ...}`（键值对字典）|
+|`effect`|状态效果选择器|效果对象数组 `[{...}, {...}]` 或 `{"effects": [...], "probability": ...}`|
+
+> **示例**：`use_remainder` 组件（`item` 类型）的输出值：
+>
+> ```json
+> {"id": "minecraft:glass_bottle", "count": 1}
+> ```
+>
+> **示例**：`enchantments` 组件（`enchantment` 类型）的输出值：
+>
+> ```json
+> {"minecraft:sharpness": 5, "minecraft:unbreaking": 3}
+> ```
+
+### 待实现类型
+
+以下组件字段类型已在类型表中列出，但相关编辑器窗口尚未完全实现，目前暂时作为普通字符串输入框处理：
+
+|类型|当前行为|计划|
+|---|---|---|
+|`block_filter`|普通文本输入框|需要方块 ID / 标签选择器|
+|`sound_event`|（暂无组件使用）|需要声音事件选择器|
 
 ## 提示词
 
