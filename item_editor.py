@@ -155,19 +155,49 @@ class ItemEditorDialog(QDialog):
         input_layout.addStretch()
         basic_layout.addLayout(input_layout)
 
-        # === 物品堆叠组件功能（把若干控制开关放入横向换行的分组） ===
+        # === 物品堆叠组件功能（按分类组织组件开关） ===
         self.components_group = QGroupBox("物品堆叠组件功能")
         self.components_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
         comps_layout = QVBoxLayout(self.components_group)
         comps_layout.setContentsMargins(10, 0, 10, 10)
         comps_layout.setSpacing(6)
 
-        flow_container = QWidget()
-        flow = utils.FlowLayout()
-        flow.setSpacing(8)
-        flow_container.setLayout(flow)
+        # 加载组件分类数据
+        comp_id_to_category: dict[str, str] = {}
+        categories_order: list[str] = []
+        try:
+            cat_path = Path("data/component_categories.json")
+            if cat_path.exists():
+                with open(cat_path, "r", encoding="utf-8") as f:
+                    cat_data = json.load(f)
+                for cat in cat_data.get("categories", []):
+                    cat_name = cat["name"]
+                    categories_order.append(cat_name)
+                    for comp_id in cat.get("components", []):
+                        comp_id_to_category.setdefault(comp_id, cat_name)
+        except Exception as e:
+            logger.warning(f"加载分类文件失败，全部归入\"其他\": {e}")
 
-        comps_layout.addWidget(flow_container)
+        categories_order.append("其他")  # 兜底分类
+
+        # 预创建分类子分组（每个分类一个 QGroupBox，内含 FlowLayout）
+        category_groups: dict[str, QGroupBox] = {}
+        category_flows: dict[str, utils.FlowLayout] = {}
+        for cat_name in categories_order:
+            cat_group = QGroupBox(cat_name)
+            cat_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
+            cat_inner = QVBoxLayout(cat_group)
+            cat_inner.setContentsMargins(6, 0, 6, 6)
+            cat_inner.setSpacing(4)
+            flow_container = QWidget()
+            flow = utils.FlowLayout()
+            flow.setSpacing(8)
+            flow_container.setLayout(flow)
+            cat_inner.addWidget(flow_container)
+            comps_layout.addWidget(cat_group)
+            category_groups[cat_name] = cat_group
+            category_flows[cat_name] = flow
+
         basic_layout.addWidget(self.components_group)
 
         # 将分区放入 content_widget 的布局中，后续根据窗口宽度自动分栏
@@ -214,12 +244,18 @@ class ItemEditorDialog(QDialog):
                             self._gen_toggle_component(comp_check_box, comp_id)
                         )
 
-                    flow.addWidget(comp_check_box)
+                    cat = comp_id_to_category.get(comp_id, "其他")
+                    category_flows[cat].addWidget(comp_check_box)
 
                 except Exception as e:
                     logger.error(f"加载组件定义文件 {file.name} 失败: {e}")
                 else:
                     logger.info(f"已加载组件定义文件: {file.name}")
+
+        # 隐藏没有任何组件的分类子分组
+        for cat_name, flow_obj in category_flows.items():
+            if flow_obj.count() == 0:
+                category_groups[cat_name].setVisible(False)
 
         # 初始把控件属性设置，实际放置到列中在 _arrange_columns 时完成
         for w in self.content_groups:

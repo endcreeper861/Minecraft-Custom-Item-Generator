@@ -1,0 +1,7 @@
+{
+    "name": "漏斗矿车",
+    "id": "minecraft:hopper_minecart",
+    "categories": [
+        "tool"
+    ]
+}

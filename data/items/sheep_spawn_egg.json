@@ -1,0 +1,7 @@
+{
+    "name": "绵羊刷怪蛋",
+    "id": "minecraft:sheep_spawn_egg",
+    "categories": [
+        "spawn_egg"
+    ]
+}

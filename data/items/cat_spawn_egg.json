@@ -1,0 +1,7 @@
+{
+    "name": "猫刷怪蛋",
+    "id": "minecraft:cat_spawn_egg",
+    "categories": [
+        "spawn_egg"
+    ]
+}

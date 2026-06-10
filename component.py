@@ -990,7 +990,8 @@ class TextComponentMultilineWidget(ComponentWidget):
     def _refresh_preview(self) -> None:
         """从 DataPath 读取当前值并更新预览。"""
         current = self.path.read()
-        if current is None or (isinstance(current, list) and not current):
+        # 空值情况：None / 空列表 / 空字典（toggle 工厂默认写入 {}）均视为空
+        if current is None or (isinstance(current, (list, dict)) and not current):
             self._preview.setText("")
             self._preview.setPlaceholderText("(空)")
             return
@@ -1001,6 +1002,17 @@ class TextComponentMultilineWidget(ComponentWidget):
             else:
                 summary = f"{len(current)} 行"
             self._preview.setText(summary)
+        elif isinstance(current, dict):
+            # 非空 dict 情况（例如加载的旧数据）：尝试提取纯文本摘要
+            from text import TextComponent
+            try:
+                tc = TextComponent.from_dict(current)
+                summary = TextComponentWidget._plain_text_summary(tc)[:60]
+            except Exception:
+                summary = str(current)[:60]
+            self._preview.setText(summary if summary else "")
+            if not summary:
+                self._preview.setPlaceholderText("(空)")
         else:
             self._preview.setText(str(current)[:60])
 

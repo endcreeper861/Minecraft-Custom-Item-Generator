@@ -1,0 +1,28 @@
+{
+    "categories": [
+        {
+            "name": "显示与文本",
+            "components": ["custom_name", "item_name", "lore", "enchantment_glint_override"]
+        },
+        {
+            "name": "战斗与属性",
+            "components": ["attribute_modifiers", "weapon", "death_protection"]
+        },
+        {
+            "name": "工具与耐久",
+            "components": ["damage", "max_damage", "tool", "unbreakable", "use_remainder", "max_stack_size"]
+        },
+        {
+            "name": "食物与消耗",
+            "components": ["food", "consumable"]
+        },
+        {
+            "name": "附魔",
+            "components": ["enchantments", "stored_enchantments"]
+        },
+        {
+            "name": "装备",
+            "components": ["equippable"]
+        }
+    ]
+}

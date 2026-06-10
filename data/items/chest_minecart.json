@@ -1,0 +1,7 @@
+{
+    "name": "运输矿车",
+    "id": "minecraft:chest_minecart",
+    "categories": [
+        "tool"
+    ]
+}

@@ -1,0 +1,7 @@
+{
+    "name": "僵尸村民刷怪蛋",
+    "id": "minecraft:zombie_villager_spawn_egg",
+    "categories": [
+        "spawn_egg"
+    ]
+}

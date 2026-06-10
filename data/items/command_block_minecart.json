@@ -1,0 +1,7 @@
+{
+    "name": "命令方块矿车",
+    "id": "minecraft:command_block_minecart",
+    "categories": [
+        "tool"
+    ]
+}

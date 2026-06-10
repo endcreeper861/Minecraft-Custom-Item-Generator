@@ -1,0 +1,7 @@
+{
+    "name": "地图",
+    "id": "minecraft:filled_map",
+    "categories": [
+        "tool"
+    ]
+}

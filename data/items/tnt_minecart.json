@@ -1,0 +1,7 @@
+{
+    "name": "TNT矿车",
+    "id": "minecraft:tnt_minecart",
+    "categories": [
+        "tool"
+    ]
+}

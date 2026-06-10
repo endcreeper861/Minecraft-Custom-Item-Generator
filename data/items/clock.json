@@ -1,0 +1,7 @@
+{
+    "name": "时钟",
+    "id": "minecraft:clock",
+    "categories": [
+        "tool"
+    ]
+}

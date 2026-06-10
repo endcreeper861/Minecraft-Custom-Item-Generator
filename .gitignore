@@ -89,5 +89,6 @@ dmypy.json
 Thumbs.db
 
 # Logs
-
 logs/*
+
+raw_game_data/*

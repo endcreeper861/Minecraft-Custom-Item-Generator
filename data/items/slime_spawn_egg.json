@@ -1,0 +1,7 @@
+{
+    "name": "史莱姆刷怪蛋",
+    "id": "minecraft:slime_spawn_egg",
+    "categories": [
+        "spawn_egg"
+    ]
+}

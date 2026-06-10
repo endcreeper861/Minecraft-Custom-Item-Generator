@@ -1,0 +1,7 @@
+{
+    "name": "药水",
+    "id": "minecraft:potion",
+    "categories": [
+        "material"
+    ]
+}

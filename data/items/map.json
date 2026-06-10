@@ -1,0 +1,7 @@
+{
+    "name": "空地图",
+    "id": "minecraft:map",
+    "categories": [
+        "tool"
+    ]
+}

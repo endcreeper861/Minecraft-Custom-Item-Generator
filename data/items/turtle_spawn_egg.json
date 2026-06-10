@@ -1,0 +1,7 @@
+{
+    "name": "海龟刷怪蛋",
+    "id": "minecraft:turtle_spawn_egg",
+    "categories": [
+        "spawn_egg"
+    ]
+}
