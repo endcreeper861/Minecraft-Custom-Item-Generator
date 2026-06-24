@@ -1,0 +1,7 @@
+{
+    "name": "书架",
+    "id": "minecraft:bookshelf",
+    "categories": [
+        "functional"
+    ]
+}

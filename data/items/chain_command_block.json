@@ -1,0 +1,7 @@
+{
+    "name": "连锁型命令方块",
+    "id": "minecraft:chain_command_block",
+    "categories": [
+        "admin"
+    ]
+}

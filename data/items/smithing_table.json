@@ -1,0 +1,7 @@
+{
+    "name": "锻造台",
+    "id": "minecraft:smithing_table",
+    "categories": [
+        "functional"
+    ]
+}

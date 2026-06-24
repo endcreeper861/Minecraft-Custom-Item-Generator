@@ -1,0 +1,7 @@
+{
+    "name": "信标",
+    "id": "minecraft:beacon",
+    "categories": [
+        "functional"
+    ]
+}

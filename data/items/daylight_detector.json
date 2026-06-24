@@ -1,0 +1,7 @@
+{
+    "name": "阳光探测器",
+    "id": "minecraft:daylight_detector",
+    "categories": [
+        "redstone"
+    ]
+}

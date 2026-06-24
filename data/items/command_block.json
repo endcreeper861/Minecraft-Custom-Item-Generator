@@ -1,0 +1,7 @@
+{
+    "name": "命令方块",
+    "id": "minecraft:command_block",
+    "categories": [
+        "admin"
+    ]
+}

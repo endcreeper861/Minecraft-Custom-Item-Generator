@@ -2,8 +2,8 @@ import logging
 import os
 import sys
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtCore import QObject, QSize, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -24,11 +24,90 @@ import item_editor
 
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# 图标缓存（进程级，跨对话框生命周期）
+# ============================================================
+
+# 缓存：item_id → QPixmap（成功加载的真图）或 None（确认文件不存在）
+_icon_cache: dict[str, QPixmap | None] = {}
+
+# 哨兵：表示“尚未查询过缓存”
+_NOT_LOADED = object()
+
+# 透明占位图（惰性初始化，首次使用时才创建以避免模块导入时 QApplication 未就绪）
+_transparent_pixmap: QPixmap | None = None
+
+
+def _get_transparent_pixmap() -> QPixmap:
+    """返回 1×1 透明 QPixmap（惰性初始化）。"""
+    global _transparent_pixmap
+    if _transparent_pixmap is None:
+        _transparent_pixmap = QPixmap(1, 1)
+        _transparent_pixmap.fill(Qt.GlobalColor.transparent)
+    return _transparent_pixmap
+
+
+def _get_cached_icon(item_id: str) -> QPixmap | None | object:
+    """返回缓存的 QPixmap、None（已知文件缺失）、或 _NOT_LOADED（尚未查询）。"""
+    if item_id in _icon_cache:
+        return _icon_cache[item_id]
+    return _NOT_LOADED
+
+
+def _make_placeholder_pixmap(item_name: str) -> QPixmap:
+    """生成一个带首字母的彩色占位图（用于文件确认不存在的物品）。"""
+    pixmap = QPixmap(64, 64)
+    pixmap.fill(QColor("#3498db"))  # 默认蓝色
+    painter = QPainter(pixmap)
+    painter.setPen(QColor("white"))
+    font = QFont("Arial", 24, QFont.Weight.Bold)
+    painter.setFont(font)
+    text = item_name[0] if item_name else "?"
+    fm = painter.fontMetrics()
+    rect = fm.boundingRect(text)
+    x = (64 - rect.width()) // 2
+    y = (64 + rect.height()) // 2
+    painter.drawText(x, y, text)
+    painter.end()
+    return pixmap
+
+
+# ============================================================
+# 图标异步加载工作线程
+# ============================================================
+
+
+class IconLoaderWorker(QObject):
+    """在子线程中从磁盘读取 PNG 文件，通过信号将 QImage 传回主线程。"""
+
+    icon_loaded = pyqtSignal(str, object)  # item_id, QImage 或 None
+
+    def __init__(self, item_ids: list[str], parent=None):
+        super().__init__(parent)
+        self._item_ids = item_ids
+
+    def run(self):
+        for item_id in self._item_ids:
+            if self.thread().isInterruptionRequested():
+                return
+            short_id = item_id.removeprefix("minecraft:")
+            icon_path = f"data/textures/{short_id}.png"
+            if os.path.exists(icon_path):
+                try:
+                    image = QImage(icon_path)
+                    if not image.isNull():
+                        self.icon_loaded.emit(item_id, image)
+                        continue
+                except Exception as e:
+                    logger.warning(f"加载图标失败: {icon_path}，错误: {e}")
+            # 文件不存在或加载失败 → 通知主线程标记为缺失
+            self.icon_loaded.emit(item_id, None)
+
 
 class ItemWidget(QWidget):
     """
-    单个物品的显示组件：图标 + 名称
-    点击时发射 clicked 信号
+    单个物品的显示组件：图标 + 名称，支持三态图标加载（透明→真图→彩色占位）。
+    点击时发射 clicked 信号。
     """
 
     clicked = pyqtSignal(object)  # 发射选中的 Item 对象
@@ -37,9 +116,7 @@ class ItemWidget(QWidget):
         super().__init__(parent)
         self.item = item
         self.setup_ui()
-        # 设置悬停提示为 ID
         self.setToolTip(item.id)
-        # 设置鼠标跟踪以支持 hover 效果（如果需要改变样式）
         self.setMouseTracking(True)
 
     def setup_ui(self):
@@ -53,23 +130,14 @@ class ItemWidget(QWidget):
         self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.icon_label.setFixedSize(64, 64)
 
-        # 尝试加载图片，如果失败则生成一个占位图
-        pixmap = self.load_icon_or_placeholder(self.item)
-        self.icon_label.setPixmap(
-            pixmap.scaled(
-                64,
-                64,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.FastTransformation,
-            )
-        )
+        # 三态图标加载（不阻塞主线程）
+        self._apply_icon()
 
         # 名称标签
         self.name_label = QLabel(self.item.name)
         self.name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.name_label.setWordWrap(True)
         self.name_label.setFont(QFont("Segoe UI", 9))
-        # 限制最大行数，防止名字太长
         self.name_label.setMaximumHeight(40)
 
         layout.addWidget(self.icon_label)
@@ -86,31 +154,43 @@ class ItemWidget(QWidget):
             }
         """)
 
-    def load_icon_or_placeholder(self, item: item.Item) -> QPixmap:
-        icon_path = "data/textures" + "/" + item.id.removeprefix("minecraft:") + ".png"
+    # ------------------------------------------------------------------
+    # 图标状态机
+    # ------------------------------------------------------------------
 
-        if os.path.exists(icon_path):
-            try:
-                return QPixmap(icon_path)
-            except Exception as e:
-                logger.warning(f"加载图标失败: {icon_path}，错误: {e}")
+    def _get_or_create_icon(self) -> QPixmap:
+        """根据缓存状态返回图标：
+        - 真图（已缓存）→ QPixmap
+        - 已知缺失 → 彩色字母占位图
+        - 尚未加载 → 1×1 透明占位图
+        """
+        cached = _get_cached_icon(self.item.id)
+        if cached is _NOT_LOADED:
+            return _get_transparent_pixmap()
+        elif cached is None:
+            return _make_placeholder_pixmap(self.item.name)
+        else:
+            return cached
 
-        # 生成一个带首字母的彩色占位图
-        pixmap = QPixmap(64, 64)
-        pixmap.fill(QColor("#3498db"))  # 默认蓝色
-        painter = QPainter(pixmap)
-        painter.setPen(QColor("white"))
-        font = QFont("Arial", 24, QFont.Weight.Bold)
-        painter.setFont(font)
-        text = item.name[0] if item.name else "?"
-        # 简单计算文字居中
-        fm = painter.fontMetrics()
-        rect = fm.boundingRect(text)
-        x = (64 - rect.width()) // 2
-        y = (64 + rect.height()) // 2  # 基线调整
-        painter.drawText(x, y, text)
-        painter.end()
-        return pixmap
+    def _apply_icon(self):
+        """将当前图标状态应用到 icon_label。"""
+        pixmap = self._get_or_create_icon()
+        self.icon_label.setPixmap(
+            pixmap.scaled(
+                64,
+                64,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            )
+        )
+
+    def update_icon(self):
+        """主线程回调：图标缓存已更新，刷新显示。"""
+        self._apply_icon()
+
+    # ------------------------------------------------------------------
+    # 交互
+    # ------------------------------------------------------------------
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -145,10 +225,26 @@ class ItemSelectorDialog(QDialog):
         self.selected_item: item.Item | None = None
         self.only_basic = only_basic
 
+        # 图标异步加载状态
+        self._item_widgets: dict[str, ItemWidget] = {}  # item_id → widget
+        self._pending_loads: set[str] = set()
+        self._icon_thread: QThread | None = None
+        self._icon_worker: IconLoaderWorker | None = None
+
+        # 分批刷新版本号（防止旧批处理与新刷新冲突）
+        self._refresh_version = 0
+
+        # 搜索防抖定时器
+        self._search_timer = QTimer()
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self.refresh_list)
+
         self.setWindowTitle("选择物品")
         self.resize(800, 600)
         self.setup_ui()
-        self.refresh_list()
+        # 延迟到对话框 exec() 显示后再填充列表，避免 __init__ 阶段阻塞窗口出现
+        QTimer.singleShot(0, self.refresh_list)
 
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -184,7 +280,7 @@ class ItemSelectorDialog(QDialog):
         # --- 中间区域：搜索框 ---
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("搜索物品名称或 ID...")
-        self.search_box.textChanged.connect(self.refresh_list)
+        self.search_box.textChanged.connect(self._on_search_text_changed)
         # 搜索框样式
         self.search_box.setStyleSheet("""
             QLineEdit {
@@ -217,13 +313,33 @@ class ItemSelectorDialog(QDialog):
         main_layout.addWidget(self.item_list)
 
     def on_create_new(self):
+        self._cancel_icon_loader()
         item_editor.open_item_editor()
         self.all_items = (
             item.get_all_items(self.only_basic)
         )  # 重新加载物品列表，包含新创建的自定义物品
         self.refresh_list()
 
+    # ------------------------------------------------------------------
+    # 搜索防抖
+    # ------------------------------------------------------------------
+
+    def _on_search_text_changed(self):
+        """搜索文本变化时启动防抖定时器，避免高频重建列表。"""
+        self._search_timer.start()
+
+    # ------------------------------------------------------------------
+    # 列表刷新（分批创建 + 图标惰性加载）
+    # ------------------------------------------------------------------
+
     def refresh_list(self):
+        """刷新物品列表：分批创建 ItemWidget（透明占位）+ 异步加载真图。"""
+        # 取消上一轮仍在进行的图标加载和批处理
+        self._cancel_icon_loader()
+        self._refresh_version += 1  # 使旧批处理失效
+        version = self._refresh_version
+
+        self._item_widgets.clear()
         self.item_list.clear()
 
         # 获取当前分类 tag
@@ -233,33 +349,129 @@ class ItemSelectorDialog(QDialog):
         # 获取搜索文本
         search_text = self.search_box.text().lower()
 
-        for item in self.all_items:
+        # 构建过滤后的物品列表 + 收集未缓存 ID
+        filtered: list[item.Item] = []
+        unloaded_ids: list[str] = []
+
+        for it in self.all_items:
             # 1. 分类过滤
             if target_category != "all":
-                if item.categories is None:
+                if it.categories is None:
                     continue
-                if target_category not in item.categories:
+                if target_category not in it.categories:
                     continue
 
             # 2. 搜索过滤
             if search_text:
                 if (
-                    search_text not in item.name.lower()
-                    and search_text not in item.id.lower()
+                    search_text not in it.name.lower()
+                    and search_text not in it.id.lower()
                 ):
                     continue
 
-            # 创建列表项
+            filtered.append(it)
+
+            # 3. 判断是否需要异步加载
+            if _get_cached_icon(it.id) is _NOT_LOADED:
+                unloaded_ids.append(it.id)
+
+        # 保存到实例变量供分批处理使用
+        self._refresh_queue = filtered
+        self._refresh_unloaded = unloaded_ids
+        self._refresh_index = 0
+
+        # 延迟启动第一批（让对话框先完成首次绘制）
+        QTimer.singleShot(0, lambda: self._process_next_batch(version))
+
+    def _process_next_batch(self, version: int):
+        """处理下一批 ItemWidget 创建（每批 30 个），批次间让出事件循环。"""
+        if version != self._refresh_version:
+            return  # 已被新的 refresh_list 调用取代
+
+        BATCH_SIZE = 30
+        queue = self._refresh_queue
+        start = self._refresh_index
+        end = min(start + BATCH_SIZE, len(queue))
+
+        self.item_list.setUpdatesEnabled(False)
+        for i in range(start, end):
+            it = queue[i]
             list_item = QListWidgetItem()
-            # 设置大小以匹配 GridSize，确保布局整齐
             list_item.setSizeHint(QSize(90, 110))
-
-            # 创建自定义 Widget
-            widget = ItemWidget(item)
+            widget = ItemWidget(it)
             widget.clicked.connect(self.on_item_clicked)
-
+            self._item_widgets[it.id] = widget
             self.item_list.addItem(list_item)
             self.item_list.setItemWidget(list_item, widget)
+        self.item_list.setUpdatesEnabled(True)
+
+        self._refresh_index = end
+
+        if end < len(queue):
+            # 还有更多 → 下一批
+            QTimer.singleShot(0, lambda: self._process_next_batch(version))
+        else:
+            # 全部完成 → 启动图标加载
+            if self._refresh_unloaded:
+                self._start_icon_loader(self._refresh_unloaded)
+
+    # ------------------------------------------------------------------
+    # 图标异步加载管理
+    # ------------------------------------------------------------------
+
+    def _start_icon_loader(self, item_ids: list[str]):
+        """启动子线程批量加载图标。"""
+        self._pending_loads = set(item_ids)
+
+        self._icon_thread = QThread()
+        self._icon_worker = IconLoaderWorker(item_ids)
+        self._icon_worker.moveToThread(self._icon_thread)
+
+        # 连接信号
+        self._icon_worker.icon_loaded.connect(self._on_icon_loaded)
+        self._icon_thread.started.connect(self._icon_worker.run)
+
+        # 线程结束后自动清理
+        self._icon_thread.finished.connect(self._icon_thread.deleteLater)
+        self._icon_thread.finished.connect(
+            lambda: setattr(self, '_icon_thread', None)
+        )
+
+        self._icon_thread.start()
+
+    def _cancel_icon_loader(self):
+        """取消正在运行的图标加载线程。"""
+        if self._icon_thread is not None and self._icon_thread.isRunning():
+            self._icon_thread.requestInterruption()
+            self._icon_thread.quit()
+            self._icon_thread.wait(1000)
+        self._pending_loads.clear()
+        self._icon_thread = None
+        self._icon_worker = None
+
+    def _on_icon_loaded(self, item_id: str, qimage_or_none):
+        """主线程槽：子线程加载完一张图后回调。"""
+        self._pending_loads.discard(item_id)
+
+        # 写入缓存
+        if qimage_or_none is not None:
+            _icon_cache[item_id] = QPixmap.fromImage(qimage_or_none)
+        else:
+            _icon_cache[item_id] = None  # 标记文件不存在
+
+        # 更新对应 widget（如果该 widget 仍存在）
+        widget = self._item_widgets.get(item_id)
+        if widget is not None:
+            widget.update_icon()
+
+    # ------------------------------------------------------------------
+    # 生命周期
+    # ------------------------------------------------------------------
+
+    def closeEvent(self, event):
+        self._cancel_icon_loader()
+        self._refresh_version += 1  # 使所有待处理批次失效
+        super().closeEvent(event)
 
     def on_item_clicked(self, item: item.Item):
         self.selected_item = item

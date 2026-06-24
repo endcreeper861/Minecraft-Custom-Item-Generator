@@ -1,0 +1,7 @@
+{
+    "name": "循环型命令方块",
+    "id": "minecraft:repeating_command_block",
+    "categories": [
+        "admin"
+    ]
+}

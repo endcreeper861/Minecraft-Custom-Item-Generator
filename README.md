@@ -101,6 +101,48 @@ classDiagram
     EffectWindow ..> Effect: 访问属性
 ```
 
+## 导入物品列表
+
+本程序通过 `data/textures/` 中的物品渲染图来自动识别游戏中所有可用的物品和方块。以下是首次导入或更新物品列表的步骤：
+
+### 准备工作
+
+1. **清空已有纹理**：删除 `./data/textures` 目录下所有 `.png` 图片文件（保留目录结构）。
+
+2. **导出物品渲染图**：使用游戏内 Mod（如 [WikiRenderer](https://www.mcmod.cn/class/25544.html)）批量导出全部物品和方块的渲染图。
+
+   以 WikiRenderer 为例，在游戏中执行以下命令：
+
+   ```txt
+   /wikirender group item namespace minecraft batch items
+   ```
+
+   并将设置调整为：
+   - **物品分辨率**：`128`
+   - **方块物品分辨率**：`128`
+   - **文件名预设**：`%id%`
+
+3. **复制渲染图**：将导出的全部物品渲染图复制到 `./data/textures/` 目录下。
+
+4. **运行转换脚本**：执行以下命令即可自动生成全部物品的 JSON 数据文件。
+
+   ```bash
+   py -3.14 tools/convert_items.py
+   ```
+
+### 工作原理
+
+转换脚本 `tools/convert_items.py` 会：
+
+- 扫描 `data/textures/` 下所有 `.png` 文件，以其文件名（去掉扩展名）作为物品 ID 清单
+- 自动排除无纹理的物品（如火、水、空气等技术性方块）
+- 从 `raw_game_data/zh_cn.json` 查找中文名称
+- 根据内置分类规则（`tools/item_categories.py`）自动为每个物品分配创造模式物品栏分类
+
+### 更新与维护
+
+当 Minecraft 更新新增物品时，只需重新执行上述步骤（重新导出纹理、复制到 `data/textures/`、再运行转换脚本）即可。如果部分物品的分类不准确，可编辑 `tools/item_categories.py` 中的 `EXACT` 字典或 `BLOCK_PATTERNS` 模式列表进行调整。
+
 ## Component组件类详解
 
 ### JSON格式

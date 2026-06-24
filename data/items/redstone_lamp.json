@@ -1,0 +1,7 @@
+{
+    "name": "红石灯",
+    "id": "minecraft:redstone_lamp",
+    "categories": [
+        "functional"
+    ]
+}

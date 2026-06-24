@@ -1,0 +1,7 @@
+{
+    "name": "投掷器",
+    "id": "minecraft:dropper",
+    "categories": [
+        "redstone"
+    ]
+}

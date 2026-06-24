@@ -1,0 +1,7 @@
+{
+    "name": "唱片机",
+    "id": "minecraft:jukebox",
+    "categories": [
+        "functional"
+    ]
+}

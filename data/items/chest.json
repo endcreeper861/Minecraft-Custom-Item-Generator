@@ -1,0 +1,7 @@
+{
+    "name": "箱子",
+    "id": "minecraft:chest",
+    "categories": [
+        "functional"
+    ]
+}

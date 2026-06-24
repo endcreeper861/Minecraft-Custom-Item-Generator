@@ -1,0 +1,7 @@
+{
+    "name": "铁矿石",
+    "id": "minecraft:iron_ore",
+    "categories": [
+        "natural"
+    ]
+}

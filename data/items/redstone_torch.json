@@ -1,0 +1,7 @@
+{
+    "name": "红石火把",
+    "id": "minecraft:redstone_torch",
+    "categories": [
+        "redstone"
+    ]
+}

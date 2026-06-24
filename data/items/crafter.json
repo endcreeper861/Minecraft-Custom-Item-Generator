@@ -1,0 +1,7 @@
+{
+    "name": "合成器",
+    "id": "minecraft:crafter",
+    "categories": [
+        "functional"
+    ]
+}

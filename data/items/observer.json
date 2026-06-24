@@ -1,0 +1,7 @@
+{
+    "name": "侦测器",
+    "id": "minecraft:observer",
+    "categories": [
+        "redstone"
+    ]
+}

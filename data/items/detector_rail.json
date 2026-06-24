@@ -1,0 +1,7 @@
+{
+    "name": "探测铁轨",
+    "id": "minecraft:detector_rail",
+    "categories": [
+        "functional"
+    ]
+}

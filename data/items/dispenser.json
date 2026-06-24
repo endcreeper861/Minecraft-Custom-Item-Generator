@@ -1,0 +1,7 @@
+{
+    "name": "发射器",
+    "id": "minecraft:dispenser",
+    "categories": [
+        "redstone"
+    ]
+}

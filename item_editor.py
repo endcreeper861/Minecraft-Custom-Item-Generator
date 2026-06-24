@@ -13,8 +13,8 @@ from PyQt6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPixmap
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QFileDialog,
                              QGroupBox, QHBoxLayout, QLabel, QLineEdit,
                              QMessageBox, QPlainTextEdit, QPushButton,
-                             QScrollArea, QSizePolicy, QSpinBox,
-                             QVBoxLayout, QWidget)
+                             QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout,
+                             QWidget)
 
 import component
 import item
@@ -38,7 +38,9 @@ class ItemEditorDialog(QDialog):
         self.current_item: item.Item = item.Item(
             id="", name="", count=1
         )  # 当前编辑的物品对象
-        self._checkbox_to_comp_id: dict[QCheckBox, str] = {}  # checkbox → component_id 映射
+        self._checkbox_to_comp_id: dict[QCheckBox, str] = (
+            {}
+        )  # checkbox → component_id 映射
 
         self.setWindowTitle("自定义物品编辑器")
         self.resize(700, 500)
@@ -176,7 +178,7 @@ class ItemEditorDialog(QDialog):
                     for comp_id in cat.get("components", []):
                         comp_id_to_category.setdefault(comp_id, cat_name)
         except Exception as e:
-            logger.warning(f"加载分类文件失败，全部归入\"其他\": {e}")
+            logger.warning(f'加载分类文件失败，全部归入"其他": {e}')
 
         categories_order.append("其他")  # 兜底分类
 
@@ -530,9 +532,7 @@ class ItemEditorDialog(QDialog):
 
         except Exception as e:
             logger.exception("加载物品失败")
-            QMessageBox.critical(
-                self, "加载失败", f"读取文件时发生错误:\n{e}"
-            )
+            QMessageBox.critical(self, "加载失败", f"读取文件时发生错误:\n{e}")
 
     def _has_unsaved_changes(self) -> bool:
         """检查当前是否有未保存的编辑内容。"""

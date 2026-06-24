@@ -1,0 +1,7 @@
+{
+    "name": "红石矿石",
+    "id": "minecraft:redstone_ore",
+    "categories": [
+        "redstone"
+    ]
+}

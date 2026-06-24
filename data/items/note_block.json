@@ -1,0 +1,7 @@
+{
+    "name": "音符盒",
+    "id": "minecraft:note_block",
+    "categories": [
+        "functional"
+    ]
+}

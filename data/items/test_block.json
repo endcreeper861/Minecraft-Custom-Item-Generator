@@ -1,0 +1,7 @@
+{
+    "name": "测试方块",
+    "id": "minecraft:test_block",
+    "categories": [
+        "admin"
+    ]
+}

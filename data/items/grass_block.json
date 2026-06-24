@@ -1,0 +1,7 @@
+{
+    "name": "草方块",
+    "id": "minecraft:grass_block",
+    "categories": [
+        "natural"
+    ]
+}

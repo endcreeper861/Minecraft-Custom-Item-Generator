@@ -1,0 +1,7 @@
+{
+    "name": "滴水石块",
+    "id": "minecraft:dripstone_block",
+    "categories": [
+        "natural"
+    ]
+}

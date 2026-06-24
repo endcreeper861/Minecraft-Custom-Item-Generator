@@ -1,0 +1,7 @@
+{
+    "name": "附魔台",
+    "id": "minecraft:enchanting_table",
+    "categories": [
+        "functional"
+    ]
+}

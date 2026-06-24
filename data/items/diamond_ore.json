@@ -1,0 +1,7 @@
+{
+    "name": "钻石矿石",
+    "id": "minecraft:diamond_ore",
+    "categories": [
+        "natural"
+    ]
+}

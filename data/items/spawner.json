@@ -1,0 +1,7 @@
+{
+    "name": "刷怪笼",
+    "id": "minecraft:spawner",
+    "categories": [
+        "functional"
+    ]
+}

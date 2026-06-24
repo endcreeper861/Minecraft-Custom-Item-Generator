@@ -1,0 +1,7 @@
+{
+    "name": "耕地",
+    "id": "minecraft:farmland",
+    "categories": [
+        "natural"
+    ]
+}
