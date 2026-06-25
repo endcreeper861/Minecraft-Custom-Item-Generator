@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 
 import item
 import item_editor
+from utils import get_app_dir
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +89,10 @@ class IconLoaderWorker(QObject):
 
     def run(self):
         for item_id in self._item_ids:
-            if self.thread().isInterruptionRequested():
+            if self.thread().isInterruptionRequested():  # type: ignore[union-attr]
                 return
             short_id = item_id.removeprefix("minecraft:")
-            icon_path = f"data/textures/{short_id}.png"
+            icon_path = str(get_app_dir() / "data/textures" / f"{short_id}.png")
             if os.path.exists(icon_path):
                 try:
                     image = QImage(icon_path)
@@ -170,7 +171,7 @@ class ItemWidget(QWidget):
         elif cached is None:
             return _make_placeholder_pixmap(self.item.name)
         else:
-            return cached
+            return cached  # type: ignore[return-type]
 
     def _apply_icon(self):
         """将当前图标状态应用到 icon_label。"""

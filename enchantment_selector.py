@@ -26,11 +26,12 @@ from PyQt6.QtWidgets import (
 
 import enchantment
 import utils
+from utils import get_app_dir
 
 logger = logging.getLogger(__name__)
 
 
-CUSTOM_ENCHANTMENTS_DIR = "custom/enchantments/"
+CUSTOM_ENCHANTMENTS_DIR = str(get_app_dir() / "custom" / "enchantments")
 
 
 def _build_enchantment_group_from_existing(payload):

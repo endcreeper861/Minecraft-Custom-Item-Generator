@@ -48,10 +48,12 @@ from pathlib import Path
 from json import load
 import logging
 
+from utils import get_app_dir
+
 logger = logging.getLogger(__name__)
 
 
-ENCHANTMENT_DATA_DIR = "data/enchantments/"
+ENCHANTMENT_DATA_DIR = str(get_app_dir() / "data" / "enchantments")
 ALL_ENCHANTMENTS: list[Enchantment] = []
 
 

@@ -28,11 +28,12 @@ from PyQt6.QtWidgets import (
 
 import effect
 import utils
+from utils import get_app_dir
 
 logger = logging.getLogger(__name__)
 
 
-CUSTOM_EFFECTS_DIR = "custom/effects/"
+CUSTOM_EFFECTS_DIR = str(get_app_dir() / "custom" / "effects")
 
 
 def _build_effect_group_from_existing(payload):

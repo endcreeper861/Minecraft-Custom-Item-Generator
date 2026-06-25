@@ -21,6 +21,7 @@ import item
 import item_selector
 import utils
 from data_path import DataPath
+from utils import get_app_dir
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +169,7 @@ class ItemEditorDialog(QDialog):
         comp_id_to_category: dict[str, str] = {}
         categories_order: list[str] = []
         try:
-            cat_path = Path("data/component_categories.json")
+            cat_path = get_app_dir() / "data/component_categories.json"
             if cat_path.exists():
                 with open(cat_path, "r", encoding="utf-8") as f:
                     cat_data = json.load(f)
@@ -205,7 +206,7 @@ class ItemEditorDialog(QDialog):
         # 将分区放入 content_widget 的布局中，后续根据窗口宽度自动分栏
         self.content_groups = [basic_group]
 
-        for file in Path("data/components").glob("*.json"):
+        for file in (get_app_dir() / "data/components").glob("*.json"):
             with open(file, "r", encoding="utf-8") as f:
                 try:
                     comp_data = json.load(f)
@@ -441,7 +442,7 @@ class ItemEditorDialog(QDialog):
 
     def _load_icon_or_placeholder(self, item: item.Item) -> QPixmap:
         """加载物品图标或生成占位图（复用ItemWidget的逻辑）"""
-        icon_path = "data/textures" + "/" + item.id.removeprefix("minecraft:") + ".png"
+        icon_path = str(get_app_dir() / "data/textures" / f"{item.id.removeprefix('minecraft:')}.png")
 
         if os.path.exists(icon_path):
             try:
@@ -478,7 +479,7 @@ class ItemEditorDialog(QDialog):
             return
 
         # 确保data/items目录存在
-        save_dir = Path("custom/items")
+        save_dir = get_app_dir() / "custom/items"
         save_dir.mkdir(parents=True, exist_ok=True)
 
         # 构建保存路径
@@ -515,7 +516,7 @@ class ItemEditorDialog(QDialog):
                 return
 
         # 打开文件选择对话框
-        start_dir = str(Path("custom/items").resolve())
+        start_dir = str((get_app_dir() / "custom/items").resolve())
         file_path, _ = QFileDialog.getOpenFileName(
             self, "选择自定义物品 JSON", start_dir, "JSON Files (*.json)"
         )

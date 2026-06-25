@@ -1,4 +1,6 @@
 import platform
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt
@@ -9,6 +11,22 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QToolTip,
 )
+
+
+def get_app_dir() -> Path:
+    """返回应用程序根目录的绝对路径。
+
+    兼容两种运行模式：
+    - 打包模式（PyInstaller）：使用 ``sys._MEIPASS``（临时解压目录）。
+    - 开发模式：使用 ``utils.py`` 所在目录（即项目根目录）。
+
+    所有文件 I/O（数据、纹理、字体、日志、自定义预设）都应通过此函数解析路径。
+    """
+    if getattr(sys, "frozen", False):
+        # PyInstaller 打包后运行时设置 frozen=True
+        return Path(sys._MEIPASS).resolve()  # type: ignore[attr-defined]
+    # 开发模式：utils.py 位于项目根目录下
+    return Path(__file__).parent.resolve()
 
 
 system_name = platform.system()

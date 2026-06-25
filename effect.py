@@ -49,10 +49,12 @@ from pathlib import Path
 from json import load
 import logging
 
+from utils import get_app_dir
+
 logger = logging.getLogger(__name__)
 
 
-EFFECT_DATA_DIR = "data/effects/"
+EFFECT_DATA_DIR = str(get_app_dir() / "data" / "effects")
 ALL_EFFECTS: list[Effect] = []
 
 

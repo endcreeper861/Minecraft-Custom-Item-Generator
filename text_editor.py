@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
 )
 
 import utils  # DEFAULT_FONT 等
+from utils import get_app_dir
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class SafeTextEdit(QTextEdit):
         # ── 保留富文本模式（不调用 setAcceptRichText(False)）──
 
         # ── 如有Unifont用Unifont，否则回退到默认字体 ──
-        unifont_path = Path(__file__).parent / "unifont-16.0.02.otf"
+        unifont_path = get_app_dir() / "unifont-16.0.02.otf"
         font_id = QFontDatabase.addApplicationFont(str(unifont_path))
         if font_id != -1:
             families = QFontDatabase.applicationFontFamilies(font_id)

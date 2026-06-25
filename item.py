@@ -30,6 +30,8 @@ from pathlib import Path
 from json import load, dumps
 import logging
 
+from utils import get_app_dir
+
 logger = logging.getLogger(__name__)
 
 ItemCategory = Literal[
@@ -128,7 +130,7 @@ def get_all_items(only_basic=False) -> list[Item]:
     """读取所有物品数据"""
     item_list = []
 
-    for f in Path("data/items").glob("*.json"):
+    for f in (get_app_dir() / "data/items").glob("*.json"):
         with f.open("r", encoding="utf-8") as file:
             data = load(file)
             item_list.append(
@@ -142,7 +144,7 @@ def get_all_items(only_basic=False) -> list[Item]:
             )
 
     if not only_basic:
-        for f in Path("custom/items").glob("*.json"):
+        for f in (get_app_dir() / "custom/items").glob("*.json"):
             with f.open("r", encoding="utf-8") as file:
                 data = load(file)
                 item_list.append(
