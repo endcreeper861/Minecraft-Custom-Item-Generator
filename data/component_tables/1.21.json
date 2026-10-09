@@ -1,0 +1,20 @@
+{
+    "attribute_modifiers": "attribute_modifiers/1.21.json",
+    "consumable": "consumable/1.21.json",
+    "custom_name": "custom_name/1.21.json",
+    "damage": "damage/1.21.json",
+    "death_protection": "death_protection/1.21.json",
+    "enchantment_glint_override": "enchantment_glint_override/1.21.json",
+    "enchantments": "enchantments/1.21.json",
+    "equippable": "equippable/1.21.json",
+    "food": "food/1.21.json",
+    "item_name": "item_name/1.21.json",
+    "lore": "lore/1.21.json",
+    "max_damage": "max_damage/1.21.json",
+    "max_stack_size": "max_stack_size/1.21.json",
+    "stored_enchantments": "stored_enchantments/1.21.json",
+    "tool": "tool/1.21.json",
+    "unbreakable": "unbreakable/1.21.json",
+    "use_remainder": "use_remainder/1.21.json",
+    "weapon": "weapon/1.21.json"
+}

@@ -10,11 +10,11 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPixmap
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QFileDialog,
-                             QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-                             QMessageBox, QPlainTextEdit, QPushButton,
-                             QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout,
-                             QWidget)
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
+                             QFileDialog, QGroupBox, QHBoxLayout, QLabel,
+                             QLineEdit, QMessageBox, QPlainTextEdit,
+                             QPushButton, QScrollArea, QSizePolicy, QSpinBox,
+                             QVBoxLayout, QWidget)
 
 import component
 import item
@@ -42,6 +42,14 @@ class ItemEditorDialog(QDialog):
         self._checkbox_to_comp_id: dict[QCheckBox, str] = (
             {}
         )  # checkbox → component_id 映射
+        self.current_version: str = ""  # 当前选中的游戏版本
+        self._versions: dict[str, str] = {}  # 版本 → 组件映射表文件名
+        self._default_version: str = ""  # 默认版本
+        self._component_table: dict[str, str] = {}  # 组件ID → 组件数据文件相对路径
+        self._comp_id_to_category: dict[str, str] = {}  # 组件ID → 分类名
+        self._category_flows: dict[str, utils.FlowLayout] = {}  # 分类名 → FlowLayout
+        self._category_groups: dict[str, QGroupBox] = {}  # 分类名 → QGroupBox
+        self._comp_group_boxes: list[QGroupBox] = []  # 已创建的组件编辑分组
 
         self.setWindowTitle("自定义物品编辑器")
         self.resize(700, 500)
@@ -105,9 +113,9 @@ class ItemEditorDialog(QDialog):
         self.scroll_area.setWidget(self.content_widget)
 
         # === 基本设置 ===
-        basic_group = QGroupBox("基本设置")
-        basic_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
-        basic_layout = QVBoxLayout(basic_group)
+        self.basic_group = QGroupBox("基本设置")
+        self.basic_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
+        basic_layout = QVBoxLayout(self.basic_group)
         basic_layout.setContentsMargins(10, 0, 10, 10)
         basic_layout.setSpacing(10)
 
@@ -158,6 +166,27 @@ class ItemEditorDialog(QDialog):
         input_layout.addStretch()
         basic_layout.addLayout(input_layout)
 
+        # --- 目标版本选择行 ---
+        version_layout = QHBoxLayout()
+        version_layout.setSpacing(10)
+        version_layout.addWidget(QLabel("目标版本："))
+        self.version_combo = QComboBox()
+        self.version_combo.setMinimumWidth(140)
+        version_layout.addWidget(self.version_combo)
+        version_layout.addStretch()
+        basic_layout.addLayout(version_layout)
+
+        # 加载版本映射表并填充下拉框（连接信号前先设好初始项，避免重复触发重建）
+        self._load_versions()
+        self.version_combo.blockSignals(True)
+        for ver in self._versions:
+            self.version_combo.addItem(ver)
+        if self._default_version and self._default_version in self._versions:
+            idx = self.version_combo.findText(self._default_version)
+            if idx >= 0:
+                self.version_combo.setCurrentIndex(idx)
+        self.version_combo.blockSignals(False)
+
         # === 物品堆叠组件功能（按分类组织组件开关） ===
         self.components_group = QGroupBox("物品堆叠组件功能")
         self.components_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
@@ -166,7 +195,7 @@ class ItemEditorDialog(QDialog):
         comps_layout.setSpacing(6)
 
         # 加载组件分类数据
-        comp_id_to_category: dict[str, str] = {}
+        self._comp_id_to_category: dict[str, str] = {}
         categories_order: list[str] = []
         try:
             cat_path = get_app_dir() / "data/component_categories.json"
@@ -177,15 +206,15 @@ class ItemEditorDialog(QDialog):
                     cat_name = cat["name"]
                     categories_order.append(cat_name)
                     for comp_id in cat.get("components", []):
-                        comp_id_to_category.setdefault(comp_id, cat_name)
+                        self._comp_id_to_category.setdefault(comp_id, cat_name)
         except Exception as e:
             logger.warning(f'加载分类文件失败，全部归入"其他": {e}')
 
         categories_order.append("其他")  # 兜底分类
 
         # 预创建分类子分组（每个分类一个 QGroupBox，内含 FlowLayout）
-        category_groups: dict[str, QGroupBox] = {}
-        category_flows: dict[str, utils.FlowLayout] = {}
+        self._category_groups: dict[str, QGroupBox] = {}
+        self._category_flows: dict[str, utils.FlowLayout] = {}
         for cat_name in categories_order:
             cat_group = QGroupBox(cat_name)
             cat_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
@@ -198,72 +227,13 @@ class ItemEditorDialog(QDialog):
             flow_container.setLayout(flow)
             cat_inner.addWidget(flow_container)
             comps_layout.addWidget(cat_group)
-            category_groups[cat_name] = cat_group
-            category_flows[cat_name] = flow
+            self._category_groups[cat_name] = cat_group
+            self._category_flows[cat_name] = flow
 
         basic_layout.addWidget(self.components_group)
 
         # 将分区放入 content_widget 的布局中，后续根据窗口宽度自动分栏
-        self.content_groups = [basic_group]
-
-        for file in (get_app_dir() / "data/components").glob("*.json"):
-            with open(file, "r", encoding="utf-8") as f:
-                try:
-                    comp_data = json.load(f)
-                    comp_id = comp_data["id"]
-                    comp_desc = comp_data["description"]
-                    comp_check_box = QCheckBox(comp_desc)
-                    self._checkbox_to_comp_id[comp_check_box] = comp_id
-                    component_def = comp_data.get("components", {})
-                    if component_def != {}:
-                        comp_group = QGroupBox(comp_desc)
-                        comp_group.setVisible(False)
-                        comp_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
-                        default_value = TOGGLE_DEFAULT_UNSET
-                        default_factory = None
-                        if isinstance(component_def, dict):
-                            component_type = component_def.get("type")
-                            if component_type == "bool":
-                                default_value = component_def.get("default", False)
-                            elif component_type == "list":
-                                default_factory = list
-                            elif component_type == "dict":
-                                default_factory = dict
-                        comp_check_box.stateChanged.connect(
-                            self._gen_toggle_component(
-                                comp_check_box,
-                                comp_id,
-                                comp_group,
-                                default_value,
-                                default_factory,
-                                component_def,
-                            )
-                        )
-
-                        self.content_groups.append(comp_group)
-
-                    if component_def == {}:
-                        comp_check_box.stateChanged.connect(
-                            self._gen_toggle_component(comp_check_box, comp_id)
-                        )
-
-                    cat = comp_id_to_category.get(comp_id, "其他")
-                    category_flows[cat].addWidget(comp_check_box)
-
-                except Exception as e:
-                    logger.error(f"加载组件定义文件 {file.name} 失败: {e}")
-                else:
-                    logger.info(f"已加载组件定义文件: {file.name}")
-
-        # 隐藏没有任何组件的分类子分组
-        for cat_name, flow_obj in category_flows.items():
-            if flow_obj.count() == 0:
-                category_groups[cat_name].setVisible(False)
-
-        # 初始把控件属性设置，实际放置到列中在 _arrange_columns 时完成
-        for w in self.content_groups:
-            # 设置 size policy 以避免被强制垂直拉伸（高度随内容变化）
-            w.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.content_groups = [self.basic_group]
 
         main_layout.addWidget(self.scroll_area)
 
@@ -271,12 +241,132 @@ class ItemEditorDialog(QDialog):
         self._last_cols = 0
         self._arrange_columns()
 
+        # 连接版本切换信号并加载默认版本的组件定义
+        self.version_combo.currentTextChanged.connect(self._load_version)
+        self._load_version(self.version_combo.currentText())
+
         # === 占位：其他分区后续添加 ===
         # TODO: 添加组件编辑、分类选择、NBT编辑等其他分区
 
     def _update_count(self, value):
         """更新当前编辑物品的数量"""
         self.current_item.count = value
+
+    def _load_versions(self):
+        """加载版本映射表 (data/versions/versions.json)。
+
+        版本映射表保存所有支持的版本，并将每个版本对应到一份组件映射表文件。
+        """
+        self._versions = {}
+        self._default_version = ""
+        try:
+            versions_path = get_app_dir() / "data/versions/versions.json"
+            if versions_path.exists():
+                with open(versions_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self._versions = data.get("versions", {})
+                self._default_version = data.get("default", "")
+        except Exception as e:
+            logger.warning(f"加载版本映射表失败: {e}")
+
+    def _load_version(self, version: str):
+        """加载指定版本的组件映射表并重建组件 UI。
+
+        切换版本时保留基础物品、数量与已编辑的组件值（按组件 ID 保留）。
+        """
+        if not version:
+            return
+        self.current_version = version
+
+        # 1. 加载当前版本的组件映射表（组件ID → 组件数据文件相对路径）
+        table_file = self._versions.get(version, "")
+        self._component_table = {}
+        if table_file:
+            try:
+                table_path = get_app_dir() / "data/component_tables" / table_file
+                if table_path.exists():
+                    with open(table_path, "r", encoding="utf-8") as f:
+                        self._component_table = json.load(f)
+            except Exception as e:
+                logger.warning(f"加载组件映射表 {table_file} 失败: {e}")
+
+        # 2. 清理旧组件 UI（复选框与编辑分组）
+        self._checkbox_to_comp_id.clear()
+        for flow in self._category_flows.values():
+            utils.clear_layout(flow)
+        for group_box in self._comp_group_boxes:
+            group_box.deleteLater()
+        self._comp_group_boxes = []
+        self.content_groups = [self.basic_group]
+
+        # 3. 按组件映射表重建复选框与编辑分组
+        for comp_id, rel_path in self._component_table.items():
+            try:
+                comp_file = get_app_dir() / "data/components" / rel_path
+                with open(comp_file, "r", encoding="utf-8") as f:
+                    comp_data = json.load(f)
+                comp_desc = comp_data["description"]
+                comp_check_box = QCheckBox(comp_desc)
+                self._checkbox_to_comp_id[comp_check_box] = comp_id
+                component_def = comp_data.get("components", {})
+                if component_def != {}:
+                    comp_group = QGroupBox(comp_desc)
+                    comp_group.setVisible(False)
+                    comp_group.setStyleSheet(utils.DEFAULT_GROUP_STYLE)
+                    default_value = TOGGLE_DEFAULT_UNSET
+                    default_factory = None
+                    if isinstance(component_def, dict):
+                        component_type = component_def.get("type")
+                        if component_type == "bool":
+                            default_value = component_def.get("default", False)
+                        elif component_type == "list":
+                            default_factory = list
+                        elif component_type == "dict":
+                            default_factory = dict
+                    comp_check_box.stateChanged.connect(
+                        self._gen_toggle_component(
+                            comp_check_box,
+                            comp_id,
+                            comp_group,
+                            default_value,
+                            default_factory,
+                            component_def,
+                        )
+                    )
+
+                    self._comp_group_boxes.append(comp_group)
+                    self.content_groups.append(comp_group)
+
+                if component_def == {}:
+                    comp_check_box.stateChanged.connect(
+                        self._gen_toggle_component(comp_check_box, comp_id)
+                    )
+
+                cat = self._comp_id_to_category.get(comp_id, "其他")
+                self._category_flows[cat].addWidget(comp_check_box)
+
+            except Exception as e:
+                logger.error(f"加载组件定义文件 {rel_path} 失败: {e}")
+            else:
+                logger.info(f"已加载组件定义文件: {rel_path}")
+
+        # 4. 显示有组件的分类子分组，隐藏空分类
+        for cat_name, flow_obj in self._category_flows.items():
+            self._category_groups[cat_name].setVisible(flow_obj.count() > 0)
+
+        # 5. 还原当前物品中已勾选的组件（按组件 ID 保留已编辑的值）
+        for comp_id in self.current_item.components:
+            for checkbox, cid in self._checkbox_to_comp_id.items():
+                if cid == comp_id:
+                    checkbox.setChecked(True)
+                    break
+
+        # 6. 设置大小策略并重新布局列
+        for w in self.content_groups:
+            # 设置 size policy 以避免被强制垂直拉伸（高度随内容变化）
+            w.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self._last_cols = 0
+        self._arrange_columns()
 
     def _gen_toggle_component(
         self,
